@@ -82,7 +82,34 @@ vector<double> GeneClassifierNorm( const vector<vector<double>> &trainData,
 
     // set prior
     vector<double> lambda( num_class );
+    for( int k = 0; k < num_class; ++k )
+        lambda[k] = stat[k] / trainData.size();
 
+    // compute likelihood for new point
+    vector<double> l( num_class );
+    for( int k = 0; k < num_class; ++k )
+    {
+        // compute determinant
+        double det; 
+        // adding diagonals
+        for( int j = 0; j < var[k][0].size(); ++j )
+        {
+            double temp = 1;
+            int i, m = j;
+            for( int n = 0; n < var[k][0].size(); ++n )
+            {
+                temp *= var[k][m][i];
+                i++, m++;
+                if( i == var[k][0].size() )
+                    i = 0;
+                if( m == var[k][0].size() )
+                    m = 0;
+            }
+            det += temp;
+        }
+        // subtracting diagonals
+
+    }
     vector<double> result;
     return result;
 }
