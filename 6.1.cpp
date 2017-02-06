@@ -1,5 +1,5 @@
 /*************************************************************************
-	> File Name: 6.1_alter2.cpp
+	> File Name: 6.1.cpp
 	> Author: 
 	> Mail: 
 	> Created Time: 2017年02月01日 星期三 08时21分16秒
@@ -51,8 +51,6 @@ VectorXd GeneClassifierNorm( MatrixXd trainData, VectorXd state,
 
         // likelihoods(save)
         VectorXd deviation = point - mean;
-        cout << "Deviation:" << endl << deviation << endl;
-        cout << "Deviation T:" << endl << deviation.transpose() << endl;
         MatrixXd var_inv = var.jacobiSvd(ComputeThinU|ComputeThinV).solve(
             MatrixXd::Identity(var.rows(),var.cols())
             );
@@ -61,7 +59,6 @@ VectorXd GeneClassifierNorm( MatrixXd trainData, VectorXd state,
         l(k) = exp( -0.5*deviation.transpose()*var_inv*deviation) /
         ( pow( 2*M_PI, round(trainData.rows()/2) )*sqrt(
             abs(var.determinant() ) ));
-        cout << "Likelihoods:" << endl << l << endl;
     }
     // classify the new datapoint
     double sum_lk;
