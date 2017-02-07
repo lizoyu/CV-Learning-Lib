@@ -31,6 +31,31 @@ void EMforMoG( MatrixXd &trainData, int num_clusters )
         for( int j = 0; j < trainData.rows(); ++j )
             var(j,j) += pow( trainData(j,i) - mean_all(j), 2 );
     }
+    
+    // repeat until L dont change
+    while( L - L_old != 0 )
+    {
+        // E-step
+        MatrixXd l(K,trainData.cols());
+        MatrixXd r(K,trainData.cols());
+        for( int i = 0; i < trainData.cols(); ++i )
+        {
+            // likelihood
+            for( int k = 0; k < K; ++k )
+            {
+                VectorXd deviation = trainData.cols(i) - mean(k);
+                MatrixXd var_k = var.block( k*trainData.rows() , 0,
+                                        trainData.rows(), trainData.rows() );
+                l(k,i) = exp( -0.5*deviation.transpose()*var_k.inverse()
+                             *deviation) / ( pow( 2*M_PI, 
+                round(trainData.rows()/2) )*sqrt( abs(var_k.determinant() ) )); 
+            }
+            // posterior
+            r.col(i) = l.col(i) / l.col(i).sum();
+        }
 
-    // E-step
+        // M-step
+        
+    }   
+
 }
