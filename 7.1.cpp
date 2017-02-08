@@ -55,6 +55,25 @@ void EMforMoG( MatrixXd &trainData, int num_clusters )
         }
 
         // M-step
+        for( int k = 0; k < K; ++k )
+        {
+            lambda(k) = r.row(k).sum() / r.sum();
+            mean.col(k).empty();
+            for( int i = 0; i < r.cols(); ++i )
+                mean += r(k,i) * trainData.col(i);
+            mean.col(k) = mean.col(k) / r.row(k).sum();
+            for( int i = 0; i < r.cols(); ++i )
+            {
+                VectorXd deviation = trainData.col(i) - mean.col(k);
+                var.block(k*mean.rows(),0,mean.rows(),mean.rows()).empty(); 
+                var.block(k*mean.rows(),0,mean.rows(),mean.rows()) += 
+                    r(k,i) * deviation * deviation.transpose(); 
+            }
+            var.block(k*mean.rows(),0,mean.rows(),mean.rows()) =  
+                var.block(k*mean.rows(),0,mean.rows(),mean.rows()).diagonal()
+                .asDiagonal() / r.row(k).sum();
+        }
+        // Log likelihood and EM bound
         
     }   
 
