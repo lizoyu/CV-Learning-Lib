@@ -74,7 +74,29 @@ void EMforMoG( MatrixXd &trainData, int num_clusters )
                 .asDiagonal() / r.row(k).sum();
         }
         // Log likelihood and EM bound
-        
+        double L, B;
+        for( int i = 0; i < trainData.cols(); ++i )
+        {
+            double temp_L = 0;
+            for( int k = 0; k < K; ++k )
+            {
+                VectorXd deviation = trainData.cols(i) - mean(k);
+                MatrixXd var_k = var.block( k*trainData.rows() , 0,
+                                        trainData.rows(), trainData.rows() );
+                temp_L += lambda(k) * exp( -0.5*deviation.transpose()*
+                    var_k.inverse() *deviation) / ( pow( 2*M_PI,round(
+                    trainData.rows()/2) )*sqrt( abs( var_k.determinant() ) ) );
+                B += r(k,i)*log10((lambda(k)*exp(-0.5*deviation.transpose()*
+                    var_k.inverse()*deviation) / (pow(2*M_PI,round(
+                    trainData.rows()/2))*sqrt(abs(var_k.determinantmZ))))/r(k,i));
+            }
+            L += log10( temp );
+        }
     }   
+}
 
+int main()
+{
+    
+    return 0;
 }
