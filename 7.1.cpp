@@ -95,8 +95,48 @@ void EMforMoG( MatrixXd &trainData, int num_clusters )
     }   
 }
 
+void inferMoG( VectorXd &lambda, MatrixXd &mean, MatrixXd &var, VectorXd point,
+	       double prior )
+{
+    int num_clusters = lambda.size();
+    // compute likelihood for new point
+    double l;
+    for( int k = 0; k < K; ++k )
+    {
+        VectorXd deviation = point - mean(k);
+        MatrixXd var_k = var.block( k*trainData.rows() , 0,
+                                trainData.rows(), trainData.rows() );
+        l += lambda(k) * exp( -0.5*deviation.transpose()*var_k.inverse()
+                     *deviation) / ( pow( 2*M_PI, 
+        round(trainData.rows()/2) )*sqrt( abs(var_k.determinant() ) )); 
+    }
+    l *= prior;
+
+    return l;
+}
+
 int main()
 {
-    
+    // two class, 1 - (10, 20, 30); 2 - (70, 80, 90);
+    int num_class = 2;
+	MatrixXd trainData_1(3,3), trainData_2(3,3);
+	trainData_1 << 1.3, 0.9, 1.1,
+		           2.2, 1.8, 2.1,
+                   3.1, 2.4, 3.1;
+	trainData_2 << 7.4, 6.8, 7.1,
+                   8.2, 7.6, 8.1,
+                   9.1, 8.9, 9.1;
+	trainData_1 *= 10;
+	trainData_2 *= 10;
+	VectorXd point(3);
+	point << 68, 78, 88;
+
+    // train two MoG model for each class
+    VectorXd lambda_1, lambda_2;
+    MatrixXd mean_1, mean_2;
+    MatrixXd var_1, var_2;
+    double prior_1 = 0.5, prior_2 = 0.5;
+
+
     return 0;
 }
