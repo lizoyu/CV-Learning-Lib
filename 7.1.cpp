@@ -10,19 +10,18 @@
 using namespace std;
 using namespace Eigen;
 
-void EMforMoG( MatrixXd &trainData, int num_clusters )
+void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
+              MatrixXd &var, int num_clusters )
 {
-    // lambda: (K,1); mean: (trainData.rows(),K); var:(rows*K,K);
+    // lambda: (K,1); mean: (trainData.rows(),K); var:(rows*K,rows);
     // initiate
-    VectorXd lambda(K);
-    lambda += 1/K;
-    MatrixXd mean(trainData.rows(),K);
+    int K = num_clusters;
+    lambda = lambda + 1/K;
     for( int k = 0; k < K; ++k )
     {
         for( int i = 0; i < trainData.rows(); ++i )
             mean(i,k) = trainData.row(i).head(k+1) / (k+1);
     }
-    MatrixXd var(trainData.rows()*K,trainData.rows());
     VectorXd mean_all(trainData.rows());
     for( int i = 0; i < mean_all.size(); ++i )
         mean_all(i) = trainData.row(i).mean();
@@ -31,8 +30,12 @@ void EMforMoG( MatrixXd &trainData, int num_clusters )
         for( int j = 0; j < trainData.rows(); ++j )
             var(j,j) += pow( trainData(j,i) - mean_all(j), 2 );
     }
+    for( int i = 1; i < K; ++i )
+        var.block( i*trainData.rows(), 0, trainData.rows(), trainData.rows() ) = 
+            var.block( 0, 0, trainData.rows(), trainData.rows() );
     
     // repeat until L dont change
+    double L = 0, L_old = 1;
     while( L - L_old != 0 )
     {
         // E-step
@@ -43,7 +46,7 @@ void EMforMoG( MatrixXd &trainData, int num_clusters )
             // likelihood
             for( int k = 0; k < K; ++k )
             {
-                VectorXd deviation = trainData.cols(i) - mean(k);
+                VectorXd deviation = trainData.col(i) - mean.col(k);
                 MatrixXd var_k = var.block( k*trainData.rows() , 0,
                                         trainData.rows(), trainData.rows() );
                 l(k,i) = exp( -0.5*deviation.transpose()*var_k.inverse()
@@ -58,14 +61,15 @@ void EMforMoG( MatrixXd &trainData, int num_clusters )
         for( int k = 0; k < K; ++k )
         {
             lambda(k) = r.row(k).sum() / r.sum();
-            mean.col(k).empty();
+            mean.col(k) = VectorXd::Zero( mean.rows() );
             for( int i = 0; i < r.cols(); ++i )
-                mean += r(k,i) * trainData.col(i);
+                mean.col(k) += r(k,i) * trainData.col(i);
             mean.col(k) = mean.col(k) / r.row(k).sum();
             for( int i = 0; i < r.cols(); ++i )
             {
                 VectorXd deviation = trainData.col(i) - mean.col(k);
-                var.block(k*mean.rows(),0,mean.rows(),mean.rows()).empty(); 
+                var.block(k*mean.rows(),0,mean.rows(),mean.rows()) = 
+                    MatrixXd::Zero( mean.rows(), mean.rows() ); 
                 var.block(k*mean.rows(),0,mean.rows(),mean.rows()) += 
                     r(k,i) * deviation * deviation.transpose(); 
             }
@@ -74,13 +78,14 @@ void EMforMoG( MatrixXd &trainData, int num_clusters )
                 .asDiagonal() / r.row(k).sum();
         }
         // Log likelihood and EM bound
-        double L, B;
+        double B;
+        L_old = L;
         for( int i = 0; i < trainData.cols(); ++i )
         {
             double temp_L = 0;
             for( int k = 0; k < K; ++k )
             {
-                VectorXd deviation = trainData.cols(i) - mean(k);
+                VectorXd deviation = trainData.col(i) - mean.col(k);
                 MatrixXd var_k = var.block( k*trainData.rows() , 0,
                                         trainData.rows(), trainData.rows() );
                 temp_L += lambda(k) * exp( -0.5*deviation.transpose()*
@@ -88,27 +93,27 @@ void EMforMoG( MatrixXd &trainData, int num_clusters )
                     trainData.rows()/2) )*sqrt( abs( var_k.determinant() ) ) );
                 B += r(k,i)*log10((lambda(k)*exp(-0.5*deviation.transpose()*
                     var_k.inverse()*deviation) / (pow(2*M_PI,round(
-                    trainData.rows()/2))*sqrt(abs(var_k.determinantmZ))))/r(k,i));
+                    trainData.rows()/2))*sqrt(abs(var_k.determinant()))))/r(k,i));
             }
-            L += log10( temp );
+            L += log10( temp_L );
         }
     }   
 }
 
-void inferMoG( VectorXd &lambda, MatrixXd &mean, MatrixXd &var, VectorXd point,
+double inferMoG( VectorXd &lambda, MatrixXd &mean, MatrixXd &var, VectorXd point,
 	       double prior )
 {
-    int num_clusters = lambda.size();
+    int K = lambda.size();
     // compute likelihood for new point
     double l;
     for( int k = 0; k < K; ++k )
     {
-        VectorXd deviation = point - mean(k);
-        MatrixXd var_k = var.block( k*trainData.rows() , 0,
-                                trainData.rows(), trainData.rows() );
+        VectorXd deviation = point - mean.col(k);
+        MatrixXd var_k = var.block( k*mean.rows() , 0,
+                                mean.rows(), mean.rows() );
         l += lambda(k) * exp( -0.5*deviation.transpose()*var_k.inverse()
                      *deviation) / ( pow( 2*M_PI, 
-        round(trainData.rows()/2) )*sqrt( abs(var_k.determinant() ) )); 
+        round(mean.rows()/2) )*sqrt( abs(var_k.determinant() ) )); 
     }
     l *= prior;
 
@@ -132,11 +137,22 @@ int main()
 	point << 68, 78, 88;
 
     // train two MoG model for each class
-    VectorXd lambda_1, lambda_2;
-    MatrixXd mean_1, mean_2;
-    MatrixXd var_1, var_2;
+    int K = 3;
+    VectorXd lambda_1(K,1), lambda_2(K,1);
+    MatrixXd mean_1(trainData_1.rows(),K), mean_2(trainData_2.rows(),K);
+    MatrixXd var_1(K*mean_1.rows(),mean_1.rows()), 
+        var_2(K*mean_2.rows(),mean_2.rows());
     double prior_1 = 0.5, prior_2 = 0.5;
+    EMforMoG( trainData_1, lambda_1, mean_1, var_1, K );
+    EMforMoG( trainData_2, lambda_2, mean_2, var_2, K );
 
+    // inference
+    double l_1 = inferMoG( lambda_1, mean_1, var_1, point, prior_1 );
+    double l_2 = inferMoG( lambda_2, mean_2, var_2, point, prior_2 );
+    vector<double> P(2);
+    P[0] = l_1 / (l_1 + l_2);
+    P[1] = l_2 / (l_1 + l_2);
 
+    cout << "Probility: " << P[0] << " " << P[1] << endl;
     return 0;
 }
