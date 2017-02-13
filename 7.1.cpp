@@ -6,6 +6,7 @@
  ************************************************************************/
 
 #include<iostream>
+#include<vector>
 #include<Eigen/Dense>
 using namespace std;
 using namespace Eigen;
@@ -16,7 +17,7 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
     // lambda: (K,1); mean: (trainData.rows(),K); var:(rows*K,rows);
     // initiate
     int K = num_clusters;
-    lambda = lambda + 1/K;
+    lambda += VectorXd::Ones(K) / K;
     for( int k = 0; k < K; ++k )
     {
         for( int i = 0; i < trainData.rows(); ++i )
@@ -73,9 +74,11 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
                 var.block(k*mean.rows(),0,mean.rows(),mean.rows()) += 
                     r(k,i) * deviation * deviation.transpose(); 
             }
-            var.block(k*mean.rows(),0,mean.rows(),mean.rows()) =  
-                var.block(k*mean.rows(),0,mean.rows(),mean.rows()).diagonal()
-                .asDiagonal() / r.row(k).sum();
+            VectorXd vec_d = var.block(
+                k*mean.rows(),0,mean.rows(),mean.rows()).diagonal();
+            MatrixXd var_d = vec_d.asDiagonal();
+            var.block(k*mean.rows(),0,mean.rows(),mean.rows()) = 
+                var_d / r.row(k).sum();
         }
         // Log likelihood and EM bound
         double B;
