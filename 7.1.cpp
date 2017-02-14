@@ -21,7 +21,7 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
     for( int k = 0; k < K; ++k )
     {
         for( int i = 0; i < trainData.rows(); ++i )
-            mean(i,k) = trainData.row(i).head(k+1) / (k+1);
+            mean(i,k) = trainData.row(i).head(k+1).sum() / (k+1);
     }
     VectorXd mean_all(trainData.rows());
     for( int i = 0; i < mean_all.size(); ++i )
@@ -34,11 +34,11 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
     for( int i = 1; i < K; ++i )
         var.block( i*trainData.rows(), 0, trainData.rows(), trainData.rows() ) = 
             var.block( 0, 0, trainData.rows(), trainData.rows() );
-    
     // repeat until L dont change
     double L = 0, L_old = 1;
     while( L - L_old != 0 )
     {
+        cout << "L: " << L << endl;
         // E-step
         MatrixXd l(K,trainData.cols());
         MatrixXd r(K,trainData.cols());
@@ -141,7 +141,7 @@ int main()
 
     // train two MoG model for each class
     int K = 3;
-    VectorXd lambda_1(K,1), lambda_2(K,1);
+    VectorXd lambda_1(K), lambda_2(K);
     MatrixXd mean_1(trainData_1.rows(),K), mean_2(trainData_2.rows(),K);
     MatrixXd var_1(K*mean_1.rows(),mean_1.rows()), 
         var_2(K*mean_2.rows(),mean_2.rows());
