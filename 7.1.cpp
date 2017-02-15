@@ -38,7 +38,6 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
     double L = 0, L_old = 1;
     while( L - L_old != 0 )
     {
-        cout << "L: " << L << endl;
         // E-step
         MatrixXd l(K,trainData.cols());
         MatrixXd r(K,trainData.cols());
@@ -50,14 +49,14 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
                 VectorXd deviation = trainData.col(i) - mean.col(k);
                 MatrixXd var_k = var.block( k*trainData.rows() , 0,
                                         trainData.rows(), trainData.rows() );
-                l(k,i) = exp( -0.5*deviation.transpose()*var_k.inverse()
+                l(k,i) = lambda(k)*exp( -0.5*deviation.transpose()*var_k.inverse()
                              *deviation) / ( pow( 2*M_PI, 
                 round(trainData.rows()/2) )*sqrt( abs(var_k.determinant() ) )); 
             }
             // posterior
             r.col(i) = l.col(i) / l.col(i).sum();
         }
-
+        cout << "posterior:" << endl << r << endl;
         // M-step
         for( int k = 0; k < K; ++k )
         {
@@ -80,6 +79,10 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
             var.block(k*mean.rows(),0,mean.rows(),mean.rows()) = 
                 var_d / r.row(k).sum();
         }
+        cout << "lambda:" << endl << lambda << endl;
+        cout << "mean:" << endl << mean << endl;
+        cout << "var:" << endl << var << endl;
+
         // Log likelihood and EM bound
         double B;
         L_old = L;
@@ -100,6 +103,7 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
             }
             L += log10( temp_L );
         }
+        cout << "L: " << L << endl;
     }   
 }
 
