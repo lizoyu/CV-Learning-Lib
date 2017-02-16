@@ -8,6 +8,8 @@
 #include<iostream>
 #include<vector>
 #include<Eigen/Dense>
+#include<Eigen/QR>
+#include<Eigen/Eigenvalues>
 using namespace std;
 using namespace Eigen;
 
@@ -49,9 +51,11 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
                 VectorXd deviation = trainData.col(i) - mean.col(k);
                 MatrixXd var_k = var.block( k*trainData.rows() , 0,
                                         trainData.rows(), trainData.rows() );
-                l(k,i) = lambda(k)*exp( -0.5*deviation.transpose()*var_k.inverse()
-                             *deviation) / ( pow( 2*M_PI, 
-                round(trainData.rows()/2) )*sqrt( abs(var_k.determinant() ) )); 
+                CompleteOrthogonalDecomposition<MatrixXd> cod( var_k );
+                SelfAdjointEigenSolver<MatrixXd> es( var_k );
+                l(k,i) = lambda(k)*exp(-0.5*deviation.transpose()*
+                    cod.pseudoInverse()*deviation) / (pow(2*M_PI, 
+                round(trainData.rows()/2))*sqrt(abs(es.eigenvalues().sum()))); 
             }
             // posterior
             r.col(i) = l.col(i) / l.col(i).sum();
@@ -94,12 +98,15 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
                 VectorXd deviation = trainData.col(i) - mean.col(k);
                 MatrixXd var_k = var.block( k*trainData.rows() , 0,
                                         trainData.rows(), trainData.rows() );
+                CompleteOrthogonalDecomposition<MatrixXd> cod( var_k );
+                SelfAdjointEigenSolver<MatrixXd> es( var_k );
                 temp_L += lambda(k) * exp( -0.5*deviation.transpose()*
-                    var_k.inverse() *deviation) / ( pow( 2*M_PI,round(
-                    trainData.rows()/2) )*sqrt( abs( var_k.determinant() ) ) );
+                    cod.pseudoInverse() *deviation) / ( pow( 2*M_PI,round(
+                    trainData.rows()/2) )*sqrt( abs( es.eigenvalues().sum() ) ));
                 B += r(k,i)*log10((lambda(k)*exp(-0.5*deviation.transpose()*
-                    var_k.inverse()*deviation) / (pow(2*M_PI,round(
-                    trainData.rows()/2))*sqrt(abs(var_k.determinant()))))/r(k,i));
+                    cod.pseudoInverse()*deviation) / (pow(2*M_PI,round(
+                    trainData.rows()/2))*sqrt(abs(es.eigenvalues().sum()))))/
+                    r(k,i));
             }
             L += log10( temp_L );
         }
