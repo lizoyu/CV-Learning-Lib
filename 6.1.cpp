@@ -54,8 +54,6 @@ VectorXd GeneClassifierNorm( MatrixXd trainData, VectorXd state,
         MatrixXd var_inv = var.jacobiSvd(ComputeThinU|ComputeThinV).solve(
             MatrixXd::Identity(var.rows(),var.cols())
             );
-        cout << "Variance Inv:" << endl << var_inv << endl;
-        cout << "Variance Det:" << abs(sqrt(var.determinant())) << endl;
         l(k) = exp( -0.5*deviation.transpose()*var_inv*deviation) /
         ( pow( 2*M_PI, round(trainData.rows()/2) )*sqrt(
             abs(var.determinant() ) ));
