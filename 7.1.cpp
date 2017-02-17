@@ -30,8 +30,9 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
         mean_all(i) = trainData.row(i).mean();
     for( int i = 0; i < trainData.cols(); ++i )
     {
+        VectorXd deviation = trainData.col(i) - mean_all;
         for( int j = 0; j < trainData.rows(); ++j )
-            var(j,j) += pow( trainData(j,i) - mean_all(j), 2 );
+            var(j,j) += pow( deviation(j) - mean_all(j), 2 );
     }
     for( int i = 1; i < K; ++i )
         var.block( i*trainData.rows(), 0, trainData.rows(), trainData.rows() ) = 
@@ -46,21 +47,22 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
         for( int i = 0; i < trainData.cols(); ++i )
         {
             // likelihood
+            // check intermediate variables
             for( int k = 0; k < K; ++k )
             {
                 VectorXd deviation = trainData.col(i) - mean.col(k);
                 MatrixXd var_k = var.block( k*trainData.rows() , 0,
-                                        trainData.rows(), trainData.rows() );
+                                    trainData.rows(), trainData.rows() );
                 CompleteOrthogonalDecomposition<MatrixXd> cod( var_k );
                 SelfAdjointEigenSolver<MatrixXd> es( var_k );
                 l(k,i) = lambda(k)*exp(-0.5*deviation.transpose()*
-                    cod.pseudoInverse()*deviation) / (pow(2*M_PI, 
-                round(trainData.rows()/2))*sqrt(abs(es.eigenvalues().sum()))); 
+                    cod.pseudoInverse()*deviation)/(pow((2*M_PI),
+                    round(trainData.rows()/2))*sqrt(abs(
+                    es.eigenvalues().sum())));
             }
             // posterior
             r.col(i) = l.col(i) / l.col(i).sum();
         }
-        cout << "posterior:" << endl << r << endl;
         // M-step
         for( int k = 0; k < K; ++k )
         {
@@ -69,11 +71,11 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
             for( int i = 0; i < r.cols(); ++i )
                 mean.col(k) += r(k,i) * trainData.col(i);
             mean.col(k) = mean.col(k) / r.row(k).sum();
+            var.block(k*mean.rows(),0,mean.rows(),mean.rows()) = 
+                MatrixXd::Zero( mean.rows(), mean.rows() ); 
             for( int i = 0; i < r.cols(); ++i )
             {
                 VectorXd deviation = trainData.col(i) - mean.col(k);
-                var.block(k*mean.rows(),0,mean.rows(),mean.rows()) = 
-                    MatrixXd::Zero( mean.rows(), mean.rows() ); 
                 var.block(k*mean.rows(),0,mean.rows(),mean.rows()) += 
                     r(k,i) * deviation * deviation.transpose(); 
             }
@@ -83,8 +85,6 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
             var.block(k*mean.rows(),0,mean.rows(),mean.rows()) = 
                 var_d / r.row(k).sum();
         }
-        cout << "lambda:" << endl << lambda << endl;
-        cout << "mean:" << endl << mean << endl;
         cout << "var:" << endl << var << endl;
 
         // Log likelihood and EM bound
@@ -110,7 +110,6 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
             }
             L += log10( temp_L );
         }
-        cout << "L: " << L << endl;
     }   
 }
 
