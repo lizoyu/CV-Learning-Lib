@@ -39,15 +39,15 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
             var.block( 0, 0, trainData.rows(), trainData.rows() );
     // repeat until L dont change
     double L = 0, L_old = 1;
-    while( L - L_old != 0 )
+    while( L - L_old > 0.0001 )
     {
+        cout << "L: " << L << endl;
         // E-step
         MatrixXd l(K,trainData.cols());
         MatrixXd r(K,trainData.cols());
         for( int i = 0; i < trainData.cols(); ++i )
         {
             // likelihood
-            // check intermediate variables
             for( int k = 0; k < K; ++k )
             {
                 VectorXd deviation = trainData.col(i) - mean.col(k);
@@ -71,25 +71,29 @@ void EMforMoG( MatrixXd &trainData, VectorXd &lambda, MatrixXd &mean,
             for( int i = 0; i < r.cols(); ++i )
                 mean.col(k) += r(k,i) * trainData.col(i);
             mean.col(k) = mean.col(k) / r.row(k).sum();
-            var.block(k*mean.rows(),0,mean.rows(),mean.rows()) = 
-                MatrixXd::Zero( mean.rows(), mean.rows() ); 
-            for( int i = 0; i < r.cols(); ++i )
+            if( var.diagonal().minCoeff() > pow( 10, -13 ) )
             {
-                VectorXd deviation = trainData.col(i) - mean.col(k);
-                var.block(k*mean.rows(),0,mean.rows(),mean.rows()) += 
-                    r(k,i) * deviation * deviation.transpose(); 
+                var.block(k*mean.rows(),0,mean.rows(),mean.rows()) = 
+                    MatrixXd::Zero( mean.rows(), mean.rows() ); 
+                for( int i = 0; i < r.cols(); ++i )
+                {
+                    VectorXd deviation = trainData.col(i) - mean.col(k);
+                    var.block(k*mean.rows(),0,mean.rows(),mean.rows()) += 
+                        r(k,i) * deviation * deviation.transpose(); 
+                }
+                VectorXd vec_d = var.block(
+                    k*mean.rows(),0,mean.rows(),mean.rows()).diagonal();
+                MatrixXd var_d = vec_d.asDiagonal();
+                var.block(k*mean.rows(),0,mean.rows(),mean.rows()) = 
+                    var_d / r.row(k).sum();
             }
-            VectorXd vec_d = var.block(
-                k*mean.rows(),0,mean.rows(),mean.rows()).diagonal();
-            MatrixXd var_d = vec_d.asDiagonal();
-            var.block(k*mean.rows(),0,mean.rows(),mean.rows()) = 
-                var_d / r.row(k).sum();
         }
-        cout << "var:" << endl << var << endl;
+        cout << "Var: " << endl << var << endl;
 
         // Log likelihood and EM bound
         double B;
         L_old = L;
+        L = 0;
         for( int i = 0; i < trainData.cols(); ++i )
         {
             double temp_L = 0;
@@ -147,7 +151,7 @@ int main()
 	trainData_1 *= 10;
 	trainData_2 *= 10;
 	VectorXd point(3);
-	point << 68, 78, 88;
+	point << 18, 28, 38;
 
     // train two MoG model for each class
     int K = 3;
