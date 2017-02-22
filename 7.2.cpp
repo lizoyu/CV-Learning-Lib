@@ -12,6 +12,7 @@
 #include<Eigen/QR>
 #include<Eigen/Eigenvalues>
 #include<boost/math/special_functions/digamma.hpp>
+#include<boost/math/special_functions/trigamma.hpp>
 using namespace std;
 using namespace Eigen;
 using namespace boost::math;
@@ -63,6 +64,19 @@ void MLforT( MatrixXd &trainData, VectorXd &mean, MatrixXd &var, double nu )
             var = var_diag / E.sum();
         }
         // compute degree of freedom
+        double t_cost_1, t_cost_2, t_cost, t_cost_old, err = 1;
+        while( err > 0.001 )
+        {
+            t_cost_1 = E.sum()/2 - log10(nu/2)/2 - 1/log(10) - 
+                digamma(nu/2)/log(10);
+            t_cost_2 = - 1/log(10) - trigamma(nu/2)/log(10);
+            t_cost_old = -nu*log10(nu/2)/2 - log10(tgamma(nu/2)) + 
+                (nu/2 - 1)*E_log.sum() - nu*E.sum()/2;
+            nu = nu - t_cost_1/t_cost_2;
+            t_cost = -nu*log10(nu/2)/2 - log10(tgamma(nu/2)) + 
+                (nu/2 - 1)*E_log.sum() - nu*E.sum()/2;
+            err = abs(t_cost - t_cost_old) / t_cost_old;
+        }
 
         // compute log likelihood
         {CompleteOrthogonalDecomposition<MatrixXd> cod( var );
