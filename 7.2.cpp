@@ -17,7 +17,7 @@ using namespace std;
 using namespace Eigen;
 using namespace boost::math;
 
-void MLforT( MatrixXd &trainData, VectorXd &mean, MatrixXd &var, double nu )
+void MLforT( MatrixXd &trainData, VectorXd &mean, MatrixXd &var, double &nu )
 {
     // trainData; mean: (trainData.row(), 1); var: (row(), row())
     // initialize
@@ -29,10 +29,8 @@ void MLforT( MatrixXd &trainData, VectorXd &mean, MatrixXd &var, double nu )
         for( int j = 0; j < trainData.rows(); ++j )
             var(j,j) += pow( deviation(j), 2 );
     }
-    cout << "mean:" << endl << mean << endl;
-    cout << "var:" << endl << var << endl;
-    double L, L_old = 1;
-    while( L - L_old > 0.001 )
+    double L = 1, L_old = 0;
+    while( abs(L - L_old) > 0.001 )
     {
         // E-step
         VectorXd delta(trainData.cols()), E(delta.size()), E_log(E.size());
@@ -65,17 +63,18 @@ void MLforT( MatrixXd &trainData, VectorXd &mean, MatrixXd &var, double nu )
         }
         // compute degree of freedom
         double t_cost_1, t_cost_2, t_cost, t_cost_old, err = 1;
-        while( err > 0.001 )
+        while( err != 0 )
         {
             t_cost_1 = E.sum()/2 - log10(nu/2)/2 - 1/log(10) - 
                 digamma(nu/2)/log(10);
             t_cost_2 = - 1/log(10) - trigamma(nu/2)/log(10);
-            t_cost_old = -nu*log10(nu/2)/2 - log10(tgamma(nu/2)) + 
+            t_cost_old = -nu*log10(nu/2)/2 - log10(tgamma(log(nu/2))) + 
                 (nu/2 - 1)*E_log.sum() - nu*E.sum()/2;
             nu = nu - t_cost_1/t_cost_2;
-            t_cost = -nu*log10(nu/2)/2 - log10(tgamma(nu/2)) + 
+            cout << "nu: " << nu << endl;
+            t_cost = -nu*log10(nu/2)/2 - log10(tgamma(log(nu/2))) + 
                 (nu/2 - 1)*E_log.sum() - nu*E.sum()/2;
-            err = abs(t_cost - t_cost_old) / t_cost_old;
+            err = (t_cost - t_cost_old) / t_cost;
         }
 
         // compute log likelihood
@@ -98,7 +97,7 @@ void MLforT( MatrixXd &trainData, VectorXd &mean, MatrixXd &var, double nu )
     }
 }
 
-double inferT( VectorXd &mean, MatrixXd &var, double nu, VectorXd point,
+/*double inferT( VectorXd &mean, MatrixXd &var, double nu, VectorXd point,
            double prior )
 {
     int D = mean.size();
@@ -113,7 +112,7 @@ double inferT( VectorXd &mean, MatrixXd &var, double nu, VectorXd point,
     l *= prior;
 
     return l;
-}
+}*/
 
 int main()
 {
@@ -133,17 +132,21 @@ int main()
     // train two t-distribution model for each class
     VectorXd mean_1(trainData_1.rows()), mean_2(trainData_2.rows());
     MatrixXd var_1(mean_1.rows(),mean_1.rows()), var_2(mean_2.rows(),mean_2.rows());
-    double prior_1 = 0.5, prior_2 = 0.5, nu_1, nu_2;
+    double prior_1 = 0.5, prior_2 = 0.5, nu_1 = 1000, nu_2 = 1000;
     MLforT( trainData_1, mean_1, var_1, nu_1 );
     MLforT( trainData_2, mean_2, var_2, nu_2 );
-
+    cout << "mean_1:" << endl << mean_1 << endl;
+    cout << "mean_2:" << endl << mean_2 << endl;
+    cout << "var_1:" << endl << var_1 << endl;
+    cout << "var_2:" << endl << var_2 << endl;
+    cout << "nu:" << nu_1 << " " << nu_2 << endl;
     // inference
-    double l_1 = inferT( mean_1, var_1, nu_1, point, prior_1 );
+    /*double l_1 = inferT( mean_1, var_1, nu_1, point, prior_1 );
     double l_2 = inferT( mean_2, var_2, nu_2, point, prior_2 );
     vector<double> P(2);
     P[0] = l_1 / (l_1 + l_2);
     P[1] = l_2 / (l_1 + l_2);
 
-    cout << "Probility: " << P[0] << " " << P[1] << endl;
+    cout << "Probility: " << P[0] << " " << P[1] << endl;*/
     return 0;
 }
