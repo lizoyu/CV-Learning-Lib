@@ -71,10 +71,9 @@ void MLforT( MatrixXd &trainData, VectorXd &mean, MatrixXd &var, double &nu )
             t_cost_old = -nu*log10(nu/2)/2 - log10(tgamma(log(nu/2))) + 
                 (nu/2 - 1)*E_log.sum() - nu*E.sum()/2;
             nu = nu - t_cost_1/t_cost_2;
-            cout << "nu: " << nu << endl;
             t_cost = -nu*log10(nu/2)/2 - log10(tgamma(log(nu/2))) + 
                 (nu/2 - 1)*E_log.sum() - nu*E.sum()/2;
-            err = (t_cost - t_cost_old) / t_cost;
+            err = abs((t_cost - t_cost_old) / t_cost);
         }
 
         // compute log likelihood
@@ -85,19 +84,19 @@ void MLforT( MatrixXd &trainData, VectorXd &mean, MatrixXd &var, double &nu )
             delta(i) = deviation.transpose() * cod.pseudoInverse() * deviation;
         }}
         L_old = L;
-        {SelfAdjointEigenSolver<MatrixXd> es( var );       
+        {SelfAdjointEigenSolver<MatrixXd> es( var );
         L = trainData.cols()*(log10(tgamma((nu+trainData.rows())/2)) - 
             trainData.rows()*log10(nu*M_PI)/2 - 
             log10(es.eigenvalues().sum())/2 - log10(tgamma(nu/2)));
         }
-        double sum_log;
+        double sum_log = 0;
         for( int i = 0; i < delta.size(); ++i )
             sum_log += log10( 1 + delta(i)/nu );
         L = L - ( nu + trainData.rows() ) * sum_log / 2;
     }
 }
 
-/*double inferT( VectorXd &mean, MatrixXd &var, double nu, VectorXd point,
+double inferT( VectorXd &mean, MatrixXd &var, double nu, VectorXd point,
            double prior )
 {
     int D = mean.size();
@@ -106,13 +105,13 @@ void MLforT( MatrixXd &trainData, VectorXd &mean, MatrixXd &var, double &nu )
     CompleteOrthogonalDecomposition<MatrixXd> cod( var );
     SelfAdjointEigenSolver<MatrixXd> es( var );
     VectorXd deviation = point - mean;
-    l = tgamma((nu+D))/2 * pow(1+(deviation.transpose()*
+    l = tgamma((nu+D))/2 * pow(1+(double)(deviation.transpose()*
         cod.pseudoInverse()*deviation)/nu, -(nu+D)/2) / 
-        (pow(nu*M_PI, round(D/2))*pow(es.eigenvalues().sum(),0.5)*tgamma(nu/2));
+        (pow(nu*M_PI, D/2)*pow(es.eigenvalues().sum(),0.5)*tgamma(nu/2));
     l *= prior;
 
     return l;
-}*/
+}
 
 int main()
 {
@@ -127,7 +126,7 @@ int main()
     trainData_1 *= 10;
     trainData_2 *= 10;
     VectorXd point(3);
-    point << 18, 28, 38;
+    point << 78, 88, 98;
 
     // train two t-distribution model for each class
     VectorXd mean_1(trainData_1.rows()), mean_2(trainData_2.rows());
@@ -135,18 +134,13 @@ int main()
     double prior_1 = 0.5, prior_2 = 0.5, nu_1 = 1000, nu_2 = 1000;
     MLforT( trainData_1, mean_1, var_1, nu_1 );
     MLforT( trainData_2, mean_2, var_2, nu_2 );
-    cout << "mean_1:" << endl << mean_1 << endl;
-    cout << "mean_2:" << endl << mean_2 << endl;
-    cout << "var_1:" << endl << var_1 << endl;
-    cout << "var_2:" << endl << var_2 << endl;
-    cout << "nu:" << nu_1 << " " << nu_2 << endl;
     // inference
-    /*double l_1 = inferT( mean_1, var_1, nu_1, point, prior_1 );
+    double l_1 = inferT( mean_1, var_1, nu_1, point, prior_1 );
     double l_2 = inferT( mean_2, var_2, nu_2, point, prior_2 );
     vector<double> P(2);
     P[0] = l_1 / (l_1 + l_2);
     P[1] = l_2 / (l_1 + l_2);
 
-    cout << "Probility: " << P[0] << " " << P[1] << endl;*/
+    cout << "Probility: " << P[0] << " " << P[1] << endl;
     return 0;
 }
