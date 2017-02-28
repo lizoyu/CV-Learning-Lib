@@ -60,17 +60,64 @@ void MLforFA( MatrixXd &trainData, int num_factor, VectorXd &mean,
 		}
 		CompleteOrthogonalDecomposition<MatrixXd> cod_sec( second );
 		factors = first*cod_sec.pseudoInverse();
-		
+		var.setZero();
+		for( int i = 0; i < trainData.cols(); ++i )
+		{
+			VectorXd deviation = trainData.col(i) - mean;
+			var += deviation*deviation.transpose() - factors*E_h.col(i)*
+				deviation.transpose();
+		}
+		VectorXd vec_diag = var.diagonal();
+		MatrixXd mat_diag = vec_diag.asDiagonal();
+		var = mat_diag / trainData.cols();
+
+		\\ Log Likelihood
+		L_old = L;
+		L = 0;
+		MatrixXd var_norm = var + factors*factors.transpose();
+		CompleteOrthogonalDecomposition<MatrixXd> cod_norm( var_norm );
+		SelfAdjointEigenSolver<MatrixXd> es( var_norm );
+		for( int i = 0; i < trainData.cols(); ++i )
+		{
+			VectorXd deviation = trainData.col(i) - mean;
+			L += log10(exp(-0.5*deviation.transpose()*cod_norm.pseudoInverse()*
+				deviation)/(pow((2*M_PI), round(trainData.rows()/2))*
+				sqrt(abs(es.eigenvalues().sum()))));
+		}
 	}	
 }
 
-void inferFA( VectorXd &mean, MatrixXd &factors, MatrixXd &var, double prior)
+double inferFA( VectorXd &mean, MatrixXd &factors, MatrixXd &var, double prior)
 {
-
+	double l;
+	
+	return l;
 }
 
 int main()
 {
+	// two class, 1 - (10, 20, 30); 2 - (70, 80, 90);
+    MatrixXd trainData_1(3,3), trainData_2(3,3);
+    trainData_1 << 1.3, 0.9, 1.1,
+                   2.2, 1.8, 2.1,
+                   3.1, 2.4, 3.1;
+    trainData_2 << 7.4, 6.8, 7.1,
+                   8.2, 7.6, 8.1,
+                   9.1, 8.9, 9.1;
+    trainData_1 *= 10;
+    trainData_2 *= 10;
+    VectorXd point(3);
+    point << 78, 88, 98;
+
+    // train two t-distribution model for each class
+    int K = 2;
+    VectorXd mean_1(trainData_1.rows()), mean_2(trainData_2.rows());
+    MatrixXd var_1(mean_1.rows(),mean_1.rows()), var_2(mean_2.rows(),mean_2.rows());
+    MatrixXd factors_1(mean_1.rows(),K), factors_2(mean_2.rows(),K);
+    double prior_1 = 0.5, prior_2 = 0.5;
+    MLforFA( trainData_1, K, mean_1, factors_1, var_1 );
+    MLforFA( trainData_2, K, mean_2, factors_2, var_2 );
+    // inference
 
 	return 0;
 }

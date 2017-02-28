@@ -134,6 +134,7 @@ int main()
     double prior_1 = 0.5, prior_2 = 0.5, nu_1 = 1000, nu_2 = 1000;
     MLforT( trainData_1, mean_1, var_1, nu_1 );
     MLforT( trainData_2, mean_2, var_2, nu_2 );
+    
     // inference
     double l_1 = inferT( mean_1, var_1, nu_1, point, prior_1 );
     double l_2 = inferT( mean_2, var_2, nu_2, point, prior_2 );
