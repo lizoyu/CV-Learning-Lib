@@ -17,40 +17,42 @@ using namespace Eigen;
 void MLforFA( MatrixXd &trainData, int num_factor, VectorXd &mean, 
 			MatrixXd &factors, MatrixXd &var )
 {
-	\\ trainData: (I, D); mean: (trainData.rows(), 1);
-	\\ factors: (rows(), num_factor); var: (rows(), rows()).
-	\\ initialize
+	// trainData: (I, D); mean: (trainData.rows(), 1);
+	// factors: (rows(), num_factor); var: (rows(), rows()).
+	// initialize
 	mean = trainData.rowwise().mean();
-	factors = MatrixXd::Random(factors.rows(),factors.cols()).abs();
+	factors = MatrixXd::Random(factors.rows(),factors.cols()).array().abs();
 	for( int i = 0; i < var.rows(); ++i )
 	{
-		VectorXd deviation = trainData.row(i) - mean(i);
+		VectorXd deviation = trainData.col(i) - mean;
 		deviation = deviation.array() * deviation.array();
 		var(i,i) = deviation.sum();
 	}
 	var = var / trainData.cols();
-
+	cout << "mean: " << endl << mean << endl;
+	cout << "factors:" << endl << factors << endl;
+	cout << "var:" << endl << var << endl;
 	double L, L_old = 1;
 	while( L - L_old != 0 )
 	{
-		\\ E-step
-		\\ E_h: (num_factor, cols()); E_hh: (num_factor, num_factor*num_factor).
+		// E-step
+		// E_h: (num_factor, cols()); E_hh: (num_factor, num_factor*num_factor).
 		MatrixXd E_h(num_factor,trainData.cols());
-		MatrixXd E_hh(num_factor,num_factor*num_factor);
+		MatrixXd E_hh(trainData.cols()*num_factor,num_factor);
 		CompleteOrthogonalDecomposition<MatrixXd> cod( var );
 		for( int i = 0; i < trainData.cols(); ++i )
 		{
 			VectorXd deviation = trainData.col(i) - mean;
 			MatrixXd temp = factors.transpose()*cod.pseudoInverse()*factors + 
 				MatrixXd::Ones(num_factor,num_factor);
-			CompleteOrthogonalDecomposition<MatrixXd> cod_temp( var );
+			CompleteOrthogonalDecomposition<MatrixXd> cod_temp( temp );
 			E_h.col(i) = cod_temp.pseudoInverse()*factors.transpose()*
 				cod.pseudoInverse()*deviation;
 			E_hh.block(i*num_factor, 0, num_factor, num_factor) = 
 				cod_temp.pseudoInverse() + E_h.col(i)* E_h.col(i).transpose();
 		}
 
-		\\ M-step
+		// M-step
 		MatrixXd first(trainData.rows(),num_factor), second(num_factor,num_factor);
 		first.setZero(); second.setZero();
 		for( int i = 0; i < trainData.cols(); ++i )
@@ -60,18 +62,24 @@ void MLforFA( MatrixXd &trainData, int num_factor, VectorXd &mean,
 		}
 		CompleteOrthogonalDecomposition<MatrixXd> cod_sec( second );
 		factors = first*cod_sec.pseudoInverse();
-		var.setZero();
-		for( int i = 0; i < trainData.cols(); ++i )
+		MatrixXd var_norm = var + factors*factors.transpose();
+		if( var_norm.diagonal().minCoeff() > pow( 10, -13 ) )
 		{
-			VectorXd deviation = trainData.col(i) - mean;
-			var += deviation*deviation.transpose() - factors*E_h.col(i)*
-				deviation.transpose();
+			var.setZero();
+			for( int i = 0; i < trainData.cols(); ++i )
+			{
+				VectorXd deviation = trainData.col(i) - mean;
+				var += deviation*deviation.transpose() - factors*E_h.col(i)*
+					deviation.transpose();
+			}
+			VectorXd vec_diag = var.diagonal();
+			MatrixXd mat_diag = vec_diag.asDiagonal();
+			var = mat_diag / trainData.cols();
 		}
-		VectorXd vec_diag = var.diagonal();
-		MatrixXd mat_diag = vec_diag.asDiagonal();
-		var = mat_diag / trainData.cols();
+		cout << "factors:" << endl << factors << endl;
+		cout << "var:" << endl << var << endl;
 
-		\\ Log Likelihood
+		// Log Likelihood
 		L_old = L;
 		L = 0;
 		MatrixXd var_norm = var + factors*factors.transpose();
@@ -84,13 +92,21 @@ void MLforFA( MatrixXd &trainData, int num_factor, VectorXd &mean,
 				deviation)/(pow((2*M_PI), round(trainData.rows()/2))*
 				sqrt(abs(es.eigenvalues().sum()))));
 		}
+		cout << "L: " << L << endl;
 	}	
 }
 
-double inferFA( VectorXd &mean, MatrixXd &factors, MatrixXd &var, double prior)
+double inferFA( VectorXd &mean, MatrixXd &factors, MatrixXd &var, 
+				VectorXd point,double prior)
 {
 	double l;
-	
+	MatrixXd var_norm = var + factors*factors.transpose();
+	CompleteOrthogonalDecomposition<MatrixXd> cod_norm( var_norm );
+	SelfAdjointEigenSolver<MatrixXd> es( var_norm );
+    VectorXd deviation = point - mean;
+    l = exp(-0.5*deviation.transpose()*cod_norm.pseudoInverse()*
+				deviation)/(pow((2*M_PI), round(point.size()/2))*
+				sqrt(abs(es.eigenvalues().sum())));
 	return l;
 }
 
@@ -118,6 +134,13 @@ int main()
     MLforFA( trainData_1, K, mean_1, factors_1, var_1 );
     MLforFA( trainData_2, K, mean_2, factors_2, var_2 );
     // inference
+/*
+	double l_1 = inferFA( mean_1, factors_1, var_1, point, prior_1 );
+    double l_2 = inferFA( mean_2, factors_2, var_2, point, prior_2 );
+    vector<double> P(2);
+    P[0] = l_1 / (l_1 + l_2);
+    P[1] = l_2 / (l_1 + l_2);
 
+    cout << "Probility: " << P[0] << " " << P[1] << endl;*/
 	return 0;
 }
