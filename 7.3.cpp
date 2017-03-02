@@ -32,8 +32,8 @@ void MLforFA( MatrixXd &trainData, int num_factor, VectorXd &mean,
 	cout << "mean: " << endl << mean << endl;
 	cout << "factors:" << endl << factors << endl;
 	cout << "var:" << endl << var << endl;
-	double L, L_old = 1;
-	while( L - L_old != 0 )
+	double L, L_old = 1, var_norm_test = 1;
+	while( abs(L - L_old) > 0.001 )
 	{
 		// E-step
 		// E_h: (num_factor, cols()); E_hh: (num_factor, num_factor*num_factor).
@@ -62,8 +62,7 @@ void MLforFA( MatrixXd &trainData, int num_factor, VectorXd &mean,
 		}
 		CompleteOrthogonalDecomposition<MatrixXd> cod_sec( second );
 		factors = first*cod_sec.pseudoInverse();
-		MatrixXd var_norm = var + factors*factors.transpose();
-		if( var_norm.diagonal().minCoeff() > pow( 10, -13 ) )
+		if( var_norm_test > pow( 10, -13 ) )
 		{
 			var.setZero();
 			for( int i = 0; i < trainData.cols(); ++i )
@@ -76,13 +75,15 @@ void MLforFA( MatrixXd &trainData, int num_factor, VectorXd &mean,
 			MatrixXd mat_diag = vec_diag.asDiagonal();
 			var = mat_diag / trainData.cols();
 		}
-		cout << "factors:" << endl << factors << endl;
-		cout << "var:" << endl << var << endl;
+		
 
 		// Log Likelihood
 		L_old = L;
 		L = 0;
 		MatrixXd var_norm = var + factors*factors.transpose();
+		VectorXd var_norm_vec = var_norm.diagonal();
+		var_norm = var_norm_vec.asDiagonal();
+		var_norm_test =  var_norm_vec.minCoeff();
 		CompleteOrthogonalDecomposition<MatrixXd> cod_norm( var_norm );
 		SelfAdjointEigenSolver<MatrixXd> es( var_norm );
 		for( int i = 0; i < trainData.cols(); ++i )
@@ -92,8 +93,7 @@ void MLforFA( MatrixXd &trainData, int num_factor, VectorXd &mean,
 				deviation)/(pow((2*M_PI), round(trainData.rows()/2))*
 				sqrt(abs(es.eigenvalues().sum()))));
 		}
-		cout << "L: " << L << endl;
-	}	
+	}
 }
 
 double inferFA( VectorXd &mean, MatrixXd &factors, MatrixXd &var, 
