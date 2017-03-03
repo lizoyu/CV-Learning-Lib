@@ -29,9 +29,6 @@ void MLforFA( MatrixXd &trainData, int num_factor, VectorXd &mean,
 		var(i,i) = deviation.sum();
 	}
 	var = var / trainData.cols();
-	cout << "mean: " << endl << mean << endl;
-	cout << "factors:" << endl << factors << endl;
-	cout << "var:" << endl << var << endl;
 	double L, L_old = 1, var_norm_test = 1;
 	while( abs(L - L_old) > 0.001 )
 	{
@@ -101,13 +98,15 @@ double inferFA( VectorXd &mean, MatrixXd &factors, MatrixXd &var,
 {
 	double l;
 	MatrixXd var_norm = var + factors*factors.transpose();
+	VectorXd var_norm_vec = var_norm.diagonal();
+	var_norm = var_norm_vec.asDiagonal();
 	CompleteOrthogonalDecomposition<MatrixXd> cod_norm( var_norm );
 	SelfAdjointEigenSolver<MatrixXd> es( var_norm );
     VectorXd deviation = point - mean;
     l = exp(-0.5*deviation.transpose()*cod_norm.pseudoInverse()*
 				deviation)/(pow((2*M_PI), round(point.size()/2))*
 				sqrt(abs(es.eigenvalues().sum())));
-	return l;
+	return l*prior;
 }
 
 int main()
@@ -123,7 +122,7 @@ int main()
     trainData_1 *= 10;
     trainData_2 *= 10;
     VectorXd point(3);
-    point << 78, 88, 98;
+    point << 12, 24, 29;
 
     // train two t-distribution model for each class
     int K = 2;
@@ -134,13 +133,12 @@ int main()
     MLforFA( trainData_1, K, mean_1, factors_1, var_1 );
     MLforFA( trainData_2, K, mean_2, factors_2, var_2 );
     // inference
-/*
 	double l_1 = inferFA( mean_1, factors_1, var_1, point, prior_1 );
     double l_2 = inferFA( mean_2, factors_2, var_2, point, prior_2 );
     vector<double> P(2);
     P[0] = l_1 / (l_1 + l_2);
     P[1] = l_2 / (l_1 + l_2);
 
-    cout << "Probility: " << P[0] << " " << P[1] << endl;*/
+    cout << "Probility: " << P[0] << " " << P[1] << endl;
 	return 0;
 }
