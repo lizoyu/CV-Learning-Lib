@@ -19,17 +19,19 @@ void MLforLinear( MatrixXd &trainData, VectorXd &label, VectorXd &phi,
 	// trainData: (rows(),cols()); label: (cols(),1); phi: (rows()+1,1)
 	MatrixXd data = MatrixXd::Ones(trainData.rows()+1,trainData.cols());
 	data.block(1, 0, trainData.rows(), trainData.cols()) = trainData;
-	VectorXd l = VectorXd::Ones(label.size()+1);
-	l.tail(label.size()) = label;
+	cout << "data: " << endl << data << endl;
 
 	// gradient
 	MatrixXd temp_1 = data*data.transpose();
+	cout << "temp_1: " << endl << temp_1 << endl;
 	CompleteOrthogonalDecomposition<MatrixXd> cod( temp_1 );
-	phi = cod.pseudoInverse()*data*l;
+	phi = cod.pseudoInverse()*data*label;
+	cout << "phi: " << endl << phi << endl;
 
 	// variance
-	VectorXd temp_2 = l - data.transpose()*phi;
-	var = temp_2.transpose() * temp_2 / trainData.cols();
+	VectorXd temp_2 = label - data.transpose()*phi;
+	cout << "temp_2: " << endl << temp_2 << endl;
+	var = (double)(temp_2.transpose() * temp_2) / trainData.cols();
 }
 
 VectorXd inferLinear( VectorXd &phi, double var, VectorXd &point, int num_class )
