@@ -19,18 +19,14 @@ void MLforLinear( MatrixXd &trainData, VectorXd &label, VectorXd &phi,
 	// trainData: (rows(),cols()); label: (cols(),1); phi: (rows()+1,1)
 	MatrixXd data = MatrixXd::Ones(trainData.rows()+1,trainData.cols());
 	data.block(1, 0, trainData.rows(), trainData.cols()) = trainData;
-	cout << "data: " << endl << data << endl;
 
 	// gradient
 	MatrixXd temp_1 = data*data.transpose();
-	cout << "temp_1: " << endl << temp_1 << endl;
 	CompleteOrthogonalDecomposition<MatrixXd> cod( temp_1 );
 	phi = cod.pseudoInverse()*data*label;
-	cout << "phi: " << endl << phi << endl;
 
 	// variance
 	VectorXd temp_2 = label - data.transpose()*phi;
-	cout << "temp_2: " << endl << temp_2 << endl;
 	var = (double)(temp_2.transpose() * temp_2) / trainData.cols();
 }
 
@@ -59,7 +55,7 @@ int main()
     VectorXd state(6);
     state << 1, 1, 1, 2, 2, 2;
     VectorXd point(3);
-    point << 68, 78, 88;
+    point << 18, 28, 38;
 
     // train the elinear regression model
     VectorXd phi(trainData.rows()+1);
