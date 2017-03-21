@@ -13,25 +13,21 @@
 using namespace std;
 using namespace Eigen;
 
-VectorXd MAPforLogi( MatrixXd &trainData, VectorXd &label, VectorXd &phi_init,
-					 double var_init )
+VectorXd MAPforLogi( MatrixXd &trainData, VectorXd &label, double var_init )
 {
 	// trainData: (rows(),cols()); label: (cols(),1); phi: (rows()+1,1)
 	// initialize
 	MatrixXd data = MatrixXd::Ones(trainData.rows()+1,trainData.cols());
 	data.block(1, 0, trainData.rows(), trainData.cols()) = trainData;
-	cout << "Data:" << endl << data << endl;
-	double L = data.rows()*log10(2*M_PI*var_init)/2 +
-				(double) (phi_init.transpose()*phi_init)/var_init;
+	double L = data.rows()*log10(2*M_PI*var_init)/2;
 	//VectorXd g = phi_init.array() / var_init;
 	//MatrixXd H = MatrixXd::Ones(g.size(),g.size()).array() / var_init;
 	VectorXd g;
 	MatrixXd H;
 
-	// start here
 	// Newton iteration(cost minimized)
 	double L_old = L - 1;
-	VectorXd phi = phi_init;
+	VectorXd phi = VectorXd::Zero(trainData.rows()+1);
 	while( L - L_old > 0.001 )
 	{
 		// compute prediction, L, g, H
@@ -40,25 +36,26 @@ VectorXd MAPforLogi( MatrixXd &trainData, VectorXd &label, VectorXd &phi_init,
 		for( int i = 0; i < label.size(); ++i )
 		{
 			y = 1 / (1 + exp(-phi.transpose()*data.col(i)));
-			cout << "y: " << y << endl;
-			cout << "product: " << -phi.transpose()*data.col(i) << endl;
 			if( label(i) == 1 && y != 0 )
 				L -= log10(y);
 			else if( y!= 1 )
 				L -= log10(1-y);
-			cout << "L: " << L << endl;
 			g += (y - label(i)) * data.col(i);
 			H += y*(1-y)*data.col(i)*data.col(i).transpose();
 		}
-		cout << "H:" << endl << H << endl;
-		cout << "g:" << endl << g << endl;
-		cout << "L: " << L << endl;
 
 		// compute new estimate
 		CompleteOrthogonalDecomposition<MatrixXd> cod( H );
 		phi -= cod.pseudoInverse() * g;
 	}
 	return phi;
+}
+
+double inferLogi( VectorXd &phi, VectorXd &point )
+{
+	VectorXd data = VectorXd::Ones(point.size()+1);
+	data.tail(point.size()) = point;
+	return 1 / (1 + exp(-phi.transpose()*data));
 }
 
 int main()
@@ -72,15 +69,16 @@ int main()
     VectorXd label(6);
     label << 1, 1, 1, 0, 0, 0;
     VectorXd point(3);
-    point << 18, 28, 38;
+    point << 68, 78, 88;
 
     // learn the parameter phi
-    VectorXd phi;
-    VectorXd phi_init = VectorXd::Zero(trainData.rows()+1);
-    cout << "phi_init:" << endl << phi_init << endl;
     double var_init = 100;
-    phi = MAPforLogi( trainData, label, phi_init, var_init );
-
+    VectorXd phi;
+    phi = MAPforLogi( trainData, label, var_init );
     cout << "Phi:" << endl << phi << endl;
+
+    double l;
+    l = inferLogi( phi, point );
+    cout << "Likelihood: " << l << endl;
 	return 0;
 }
