@@ -23,8 +23,10 @@ VectorXd MAPforLogi( MatrixXd &trainData, VectorXd &label, VectorXd &phi_init,
 	cout << "Data:" << endl << data << endl;
 	double L = data.rows()*log10(2*M_PI*var_init)/2 +
 				(double) (phi_init.transpose()*phi_init)/var_init;
-	VectorXd g = phi_init.array() / var_init;
-	MatrixXd H = MatrixXd::Ones(g.size(),g.size()).array() / var_init;
+	//VectorXd g = phi_init.array() / var_init;
+	//MatrixXd H = MatrixXd::Ones(g.size(),g.size()).array() / var_init;
+	VectorXd g;
+	MatrixXd H;
 
 	// start here
 	// Newton iteration(cost minimized)
@@ -32,14 +34,6 @@ VectorXd MAPforLogi( MatrixXd &trainData, VectorXd &label, VectorXd &phi_init,
 	VectorXd phi = phi_init;
 	while( L - L_old > 0.001 )
 	{
-		// compute new estimate
-		CompleteOrthogonalDecomposition<MatrixXd> cod( H );
-		phi = phi + cod.pseudoInverse()*g;
-		L = data.rows()*log10(2*M_PI*var_init)/2 +
-				(double)(phi.transpose()*phi)/var_init;
-		g = phi.array() / var_init;
-		H = MatrixXd::Ones(g.size(),g.size()).array() / var_init;
-
 		// compute prediction, L, g, H
 		double y;
 		L_old = L;
@@ -59,6 +53,10 @@ VectorXd MAPforLogi( MatrixXd &trainData, VectorXd &label, VectorXd &phi_init,
 		cout << "H:" << endl << H << endl;
 		cout << "g:" << endl << g << endl;
 		cout << "L: " << L << endl;
+
+		// compute new estimate
+		CompleteOrthogonalDecomposition<MatrixXd> cod( H );
+		phi -= cod.pseudoInverse() * g;
 	}
 	return phi;
 }
@@ -78,7 +76,8 @@ int main()
 
     // learn the parameter phi
     VectorXd phi;
-    VectorXd phi_init = VectorXd::Ones(trainData.rows()+1);
+    VectorXd phi_init = VectorXd::Zero(trainData.rows()+1);
+    cout << "phi_init:" << endl << phi_init << endl;
     double var_init = 100;
     phi = MAPforLogi( trainData, label, phi_init, var_init );
 
