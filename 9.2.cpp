@@ -9,6 +9,11 @@
 #include<cmath>
 #include<vector>
 #include<Eigen/Dense>
+#include"CVLearning.h"
 using namespace std;
 using namespace Eigen;
 
+VectorXd BayeforLogi()
+{
+	
+}
