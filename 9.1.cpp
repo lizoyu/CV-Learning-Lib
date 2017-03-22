@@ -51,7 +51,7 @@ VectorXd MAPforLogi( MatrixXd &trainData, VectorXd &label, double var_init )
 	return phi;
 }
 
-double inferLogi( VectorXd &phi, VectorXd &point )
+double InferMAPLogi( VectorXd &phi, VectorXd &point )
 {
 	VectorXd data = VectorXd::Ones(point.size()+1);
 	data.tail(point.size()) = point;
@@ -78,7 +78,7 @@ int main()
     cout << "Phi:" << endl << phi << endl;
 
     double l;
-    l = inferLogi( phi, point );
+    l = InferMAPLogi( phi, point );
     cout << "Likelihood: " << l << endl;
 	return 0;
 }
