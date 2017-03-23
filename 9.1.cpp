@@ -20,8 +20,6 @@ VectorXd MAPforLogi( MatrixXd &trainData, VectorXd &label, double var_init )
 	MatrixXd data = MatrixXd::Ones(trainData.rows()+1,trainData.cols());
 	data.block(1, 0, trainData.rows(), trainData.cols()) = trainData;
 	double L = data.rows()*log10(2*M_PI*var_init)/2;
-	//VectorXd g = phi_init.array() / var_init;
-	//MatrixXd H = MatrixXd::Ones(g.size(),g.size()).array() / var_init;
 	VectorXd g;
 	MatrixXd H;
 
