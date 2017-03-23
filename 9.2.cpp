@@ -18,16 +18,35 @@ void BayeforLogi( MatrixXd &trainData, VectorXd &label, double var_init,
 				VectorXd &mean, MatrixXd &var )
 {
 	// optimize to get parameter phi
-	VectorXd phi;
-	phi = MAPforLogi( trainData, label, var_init );
-
-	// compute 2nd order derivative
+	//initialize
+	MatrixXd data = MatrixXd::Ones(trainData.rows()+1,trainData.cols());
+	data.block(1, 0, trainData.rows(), trainData.cols()) = trainData;
+	double L = data.rows()*log10(2*M_PI*var_init)/2;
+	VectorXd g;
 	MatrixXd H;
-	H = MatrixXd::Ones(trainData.rows,trainData.rows()).array() / var_init;
-	for( size_t i = 0; i < trainData.cols(); ++i )
+
+	// Newton iteration(cost minimized)
+	double L_old = L - 1;
+	VectorXd phi = VectorXd::Zero(trainData.rows()+1);
+	while( L - L_old > 0.001 )
 	{
-		double y = 1 / (1 + exp(-phi.transpose()*trainData.col(i)) );
-		H += y*(1-y)*trainData.col(i)*trainData.col(i).transpose();
+		// compute prediction, L, g, H
+		double y;
+		L_old = L;
+		for( int i = 0; i < label.size(); ++i )
+		{
+			y = 1 / (1 + exp(-phi.transpose()*data.col(i)));
+			if( label(i) == 1 && y != 0 )
+				L -= log10(y);
+			else if( y!= 1 )
+				L -= log10(1-y);
+			g += (y - label(i)) * data.col(i);
+			H += y*(1-y)*data.col(i)*data.col(i).transpose();
+		}
+
+		// compute new estimate
+		CompleteOrthogonalDecomposition<MatrixXd> cod( H );
+		phi -= cod.pseudoInverse() * g;
 	}
 
 	// set mean and covariance
@@ -39,9 +58,14 @@ void BayeforLogi( MatrixXd &trainData, VectorXd &label, double var_init,
 VectorXd InferBayeLogi( VectorXd &mean, MatrixXd &var, VectorXd point )
 {
 	double mean_a;
-	mean_a = mean.transpose() * point;
+	VectorXd data = VectorXd::Ones(point.size()+1);
+	data.tail(point.size()) = point;
+	mean_a = mean.transpose() * data;
 	double var_a;
-	var_a = point.transpose() * var * point.transpose();
+	var_a = data.transpose() * var * data;
+
+    cout << "mean_a:" << mean_a << endl;
+    cout << "var_a:" << var_a << endl;
 
 	// approximate intergral for Bernoulli parameter lambda
 	double lambda;
@@ -49,8 +73,8 @@ VectorXd InferBayeLogi( VectorXd &mean, MatrixXd &var, VectorXd point )
 
 	// predictive distribution
 	VectorXd l(2);
-	l(0) = 1 - lambda;
-	l(1) = lambda;
+	l(0) = lambda;
+	l(1) = 1 - lambda;
 
 	return l;
 }
@@ -72,7 +96,9 @@ int main()
     double var_init = 100;
     VectorXd mean;
     MatrixXd var;
-    BayeforLogi( trainData, label, 100, mean, var );
+    BayeforLogi( trainData, label, var_init, mean, var );
+    cout << "mean:" << endl << mean << endl;
+    cout << "var:" << endl << var << endl;
 
     // predict
     VectorXd l;
