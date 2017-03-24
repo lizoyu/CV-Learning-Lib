@@ -25,7 +25,7 @@ VectorXd MAPforLogi( MatrixXd &trainData, VectorXd &label, double var_init )
 
 	// Newton iteration(cost minimized)
 	double L_old = L - 1;
-	VectorXd phi = VectorXd::Zero(trainData.rows()+1);
+	VectorXd phi(trainData.rows()+1);
 	while( L - L_old > 0.001 )
 	{
 		// compute prediction, L, g, H
