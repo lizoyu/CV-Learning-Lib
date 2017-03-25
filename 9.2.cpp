@@ -63,9 +63,6 @@ VectorXd InferBayeLogi( VectorXd &mean, MatrixXd &var, VectorXd point )
 	double var_a;
 	var_a = data.transpose() * var * data;
 
-    cout << "mean_a:" << mean_a << endl;
-    cout << "var_a:" << var_a << endl;
-
 	// approximate intergral for Bernoulli parameter lambda
 	double lambda;
 	lambda = 1 / (1 + exp(-mean_a / sqrt(1 + M_PI*var_a/8)));
