@@ -69,7 +69,7 @@ int main()
     VectorXd label(6);
     label << 1, 1, 1, 0, 0, 0;
     VectorXd point(3);
-    point << 68, 78, 88;
+    point << 18, 28, 38;
 
     // learn the parameter phi
     double var_init = 100;

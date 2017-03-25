@@ -47,7 +47,7 @@ void BayeforDualLogi( MatrixXd &trainData, VectorXd &label, double var_init,
 	var = -cod.pseudoInverse();
 }
 
-VectorXd InferBayeLogi( VectorXd &mean, MatrixXd &var, MatrixXd &trainData, 
+VectorXd InferBayeDualLogi( VectorXd &mean, MatrixXd &var, MatrixXd &trainData, 
 						VectorXd point )
 {
 	VectorXd data_p = VectorXd::Ones(point.size()+1);
@@ -56,12 +56,9 @@ VectorXd InferBayeLogi( VectorXd &mean, MatrixXd &var, MatrixXd &trainData,
 	data.block(1, 0, trainData.rows(), trainData.cols()) = trainData;
 	double mean_a;
 	// start here
-	mean_a = mean.transpose() * data;
+	mean_a = mean.transpose() * data.transpose() * data_p;
 	double var_a;
-	var_a = data.transpose() * var * data;
-
-    cout << "mean_a:" << mean_a << endl;
-    cout << "var_a:" << var_a << endl;
+	var_a = data_p.transpose() * data * var * data.transpose() * data_p;
 
 	// approximate intergral for Bernoulli parameter lambda
 	double lambda;
@@ -86,19 +83,19 @@ int main()
     VectorXd label(6);
     label << 1, 1, 1, 0, 0, 0;
     VectorXd point(3);
-    point << 68, 78, 88;
+    point << 18, 28, 38;
 
     // learn
     double var_init = 100;
     VectorXd mean;
     MatrixXd var;
-    BayeforLogi( trainData, label, var_init, mean, var );
+    BayeforDualLogi( trainData, label, var_init, mean, var );
     cout << "mean:" << endl << mean << endl;
     cout << "var:" << endl << var << endl;
 
     // predict
     VectorXd l;
-    l = InferBayeLogi( mean, var, point );
+    l = InferBayeDualLogi( mean, var, trainData, point );
     cout << "Likelihood:" << endl << l << endl;
 	return 0;
 }
