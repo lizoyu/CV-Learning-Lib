@@ -84,7 +84,13 @@ double RVC( MatrixXd &trainData, VectorXd &label, double deg_free )
 		{
 			double k = 0;
 			while( tracker[k] != i ) k++;
-
+			tracker.segment(k,tracker.size()-1-k) = tracker.tail(tracker.size()-1-k);
+			tracker.conservativeResize(tracker.size()-1);
+			mean.segment(k,mean.size()-1) = mean.tail(mean.size()-1-k);
+			mean.conservativeResize(mean.size()-1);
+			trainData.block(0,k,trainData.rows(),trainData.cols()-1-k) = 
+				trainData.rightCols(trainData.cols()-1-k);
+			trainData.conservativeResize(trainData.rows(),trainData.cols());
 		}
 	}
 
