@@ -20,11 +20,10 @@ MatrixXd RVC( MatrixXd &trainData, VectorXd &label, double deg_free,
 		HV_old = HV;
 		// MAP estimate of psi
 		// initialize
-		CompleteOrthogonalDecomposition<MatrixXd> cod( HV );
-
+		CompleteOrthogonalDecomposition<MatrixXd> cod1( HV );
 		double L = log10(1/(pow(2*M_PI,round(data.rows()/2))*
-						pow(cod.pseudoInverse().determinant(),0.5)));
-		L += -log10(exp(1))*psi.transpose()*HV*psi/2;
+						pow(cod1.pseudoInverse().determinant(),0.5)));
+		L = L - log10(exp(1))*(double)(psi.transpose()*HV*psi)/2;
 		// start here
 		VectorXd g;
 		MatrixXd H;
