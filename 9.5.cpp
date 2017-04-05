@@ -3,6 +3,7 @@
 #include<vector>
 #include<Eigen/Dense>
 #include<Eigen/QR>
+#include<Eigen/LU>
 using namespace std;
 using namespace Eigen;
 
@@ -13,17 +14,24 @@ MatrixXd RVC( MatrixXd &trainData, VectorXd &label, double deg_free,
 	data.block(1, 0, trainData.rows(), trainData.cols()) = trainData;
 	MatrixXd HV = MatrixXd::Identity(data.cols(),data.cols());
 	MatrixXd HV_old = HV.array()*0.1;
+
+	VectorXd psi(data.cols());
 	while( abs(HV.diagonal().sum() - HV_old.diagonal().sum()) > 0.1 ){
 		HV_old = HV;
 		// MAP estimate of psi
 		// initialize
-		double L = -data.cols()*log10(2*M_PI*100)/2;
+		CompleteOrthogonalDecomposition<MatrixXd> cod( HV );
+
+		double L = log10(1/(pow(2*M_PI,round(data.rows()/2))*
+						pow(cod.pseudoInverse().determinant(),0.5)));
+		L += -log10(exp(1))*psi.transpose()*HV*psi/2;
+		// start here
 		VectorXd g;
 		MatrixXd H;
 
 		// Newton iteration(cost minimized)
 		double L_old = L - 1;
-		VectorXd psi(data.cols());
+		
 		
 		while( L - L_old > 0.001 )
 		{
