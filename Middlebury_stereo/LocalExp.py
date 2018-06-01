@@ -65,18 +65,26 @@ class LocalExpStereo(ndisp=280):
 					 n[1]*np.arange(f.shape[1]) + n[2]*z0)/n[2] # cp = -(nxpu + nypv + nzz0)/nz
 
 		# initialize perturbation size
-		rd = self.ndisp/2
-		rn = 1
+		rd = self.ndisp/2; rn = 1
 
 		# loop for 'iter' times
 		for _ in range(self.iter):
 			# for each grid structure
 			for cellSize in self.cellSize:
+				# define cell grid size
 				cellHeight = leftImg.shape[0]/cellSize
 				cellWidth = leftImg.shape[1]/cellSize
 				# for each disjoint group (0, ..., 15)
-
+				groupIdx = np.meshgrid(range(4), range(4))
+				for i, j in zip(groupIdx[1].flatten(), groupIdx[0].flatten()):
+					# compute center index for each disjoint expansion region
+					y, x = np.meshgrid(np.arange(j, cellWidth, 4), np.arange(i, cellHeight, 4))
+					# create cell grid
+					cellGrid = np.zeros((cellHeight, cellWidth))
+					cellGrid[x,y] = 1
+					cellGrid = cv2.dilate(cellGrid, np.ones((3,3)), iterations=1)
 					# for each cell (in parallel)
+					for center_i, center_j in x, y:
 
 
 	def postprocessing():
@@ -94,5 +102,17 @@ class LocalExpStereo(ndisp=280):
 		"""
 		vec = np.random.normal(0, 1, size)
 		mag = np.sum(vec**2, axis=-1, keepdims=True)**0.5
-
 		return vec/mag
+
+	def disparity(f, u, v):
+		"""
+		Compute disparity for a pixel: dp = au + bv + c.
+		--------------------------------------------------------
+		Inputs:
+		- f: disparity plane, f = (a, b, c)
+		- u, v: location of the pixel (invert order of numpy array)
+		Outputs:
+		- d: disparity for a pixel
+		"""
+		a, b, c = f
+		return a*u + b*v + c
