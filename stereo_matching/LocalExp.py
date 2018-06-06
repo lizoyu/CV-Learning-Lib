@@ -4,6 +4,9 @@ from multiprocessing import Pool
 import PyMaxflow 
 
 class LocalExpStereo(ndisp=280):
+	"""
+	Local expansion moves from Taniai T., et al, PAMI 2017.
+	"""
 	def __init__():
 		# initialize parameters as paper states
 		# optimization parameters
