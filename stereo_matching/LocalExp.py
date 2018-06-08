@@ -157,7 +157,7 @@ class LocalExpStereo(ndisp=280):
 
 		return f_left, f_right
 
-	def postprocessing(f_left, f_right):
+	def postprocessing(f_left, f_right, leftImg, rightImg):
 		"""
 		Left/right consistency check and weighted median filtering.
 		--------------------------------------------------------
@@ -178,26 +178,53 @@ class LocalExpStereo(ndisp=280):
 		# fill in the invalidated pixels
 		for i, j in np.where(checkLeft):
 			leftValid = [i, j-1]
-			while not check[leftValid]:
+			while leftValid[1] > 0 and not check[leftValid]:
 				leftValid[1] -= 1
 			rightValid = [i, j+1]
-			while not check[rightValid]:
+			while rightValid[1] < leftImg.shape[1] and not check[rightValid]:
 				rightValid[1] += 1
-			f_left[i,j] = min(self.disparity(f_left, leftValid[1], leftValid[0]), 
-						 	  self.disparity(f_left, rightValid[1], rightValid[0]))
+
+			leftValid[1] = max(0, leftValid[1]); rightValid[1] = min(rightValid[1], leftImg.shape[1]-1)
+			d = {tuple(f_left[leftValid]): self.disparity(f_left, leftValid[1], leftValid[0]), 
+				 tuple(f_left[rightValid]): self.disparity(f_left, rightValid[1], rightValid[0])}
+			f_left[i,j] = min(d, key=lambda x: d[x])
 
 		for i, j in np.where(checkright):
 			leftValid = [i, j-1]
-			while not check[leftValid]:
+			while leftValid[1] > 0 and not check[leftValid]:
 				leftValid[1] -= 1
 			rightValid = [i, j+1]
-			while not check[rightValid]:
+			while rightValid[1] < leftImg.shape[1] and not check[rightValid]:
 				rightValid[1] += 1
-			f_right[i,j] = min(self.disparity(f_left, leftValid[1], leftValid[0]), 
-						 	  self.disparity(f_left, rightValid[1], rightValid[0]))
+
+			leftValid[1] = max(0, leftValid[1]); rightValid[1] = min(rightValid[1], rightImg.shape[1]-1) 
+			d = {tuple(f_right[leftValid]): self.disparity(f_right, leftValid[1], leftValid[0]), 
+				 tuple(f_right[rightValid]): self.disparity(f_right, rightValid[1], rightValid[0])}
+			f_right[i,j] = min(d, key=lambda x: d[x])
+
+		# disparity plane f -> disparity d
+		leftDis = self.disparity(f_left, s_y, s_x)
+		rightDis = self.disparity(f_right, s_y, s_x)
 
 		# apply weighted median filtering
-		
+		r = int(self.WpSize / 2)
+		for i, j in np.where(checkLeft):
+			beta = leftImg[max(0,i-r):min(i+r+1,leftImg.shape[0]),max(0,j-r):min(j+r+1,leftImg.shape[1])]
+			w = np.tile(np.exp(-np.absolute(leftImg[i,j]-beta)/self.gamma)[np.newaxis,...], (beta.size,1,1))
+			X = np.tile(beta[np.newaxis,...], (beta.size,1,1))
+			beta = beta.flatten().reshape(-1,1,1)
+			idx = np.argmin(np.sum(w*np.absolute(X-beta), axis=(1,2)))
+			leftDis[i,j] = beta[idx,0,0]
+
+		for i, j in np.where(checkright):
+			beta = rightImg[max(0,i-r):min(i+r+1,rightImg.shape[0]),max(0,j-r):min(j+r+1,rightImg.shape[1])]
+			w = np.tile(np.exp(-np.absolute(rightImg[i,j]-beta)/self.gamma)[np.newaxis,...], (beta.size,1,1))
+			X = np.tile(beta[np.newaxis,...], (beta.size,1,1))
+			beta = beta.flatten().reshape(-1,1,1)
+			idx = np.argmin(np.sum(w*np.absolute(X-beta), axis=(1,2)))
+			rightDis[i,j] = beta[idx,0,0]
+
+		return leftDis, rightDis		
 
 	def randomUnitVector(dim=3, size):
 		"""
@@ -302,7 +329,7 @@ class LocalExpStereo(ndisp=280):
 			  												  cv2.Sobel(matchImg[s_x,s_y],-1,1,0,ksize=3)))
 
 		# guided filtering
-		GuidedFilter = cv2.createGuidedFilter(refImg[s_x,s_y], self.WpSize, self.e)
+		GuidedFilter = cv2.createGuidedFilter(refImg[s_x,s_y], self.WkSize, self.e)
 		E_data = None; GuidedFilter.filter(rou, E_data)
 		return E_data
 
@@ -351,3 +378,11 @@ class LocalExpStereo(ndisp=280):
 			  np.absolute(self.disparity(fq, q_u, q_v)-self.disparity(f, q_u, q_v))
 
 		return np.maximum(self.eps, w)*np.minimum(self.taoDis, psi)
+
+def tester():
+	leftImg = np.float32(cv2.imread('data/left.jpg'))/255
+	rightImg = np.float32(cv2.imread('data/right.jpg'))/255
+	stereo = LocalExpStereo()
+	leftDis, rightDis = stereo.generateDisparityMap(leftImg, rightImg)
+
+tester()
