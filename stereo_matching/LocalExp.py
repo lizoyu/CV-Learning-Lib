@@ -1,18 +1,18 @@
 import numpy as np
 import cv2
 from multiprocessing import Pool
-import PyMaxflow 
+import maxflow 
 
-class LocalExpStereo(ndisp=280):
+class LocalExpStereo():
 	"""
 	Local expansion moves from Taniai T., et al, PAMI 2017.
 	"""
-	def __init__():
+	def __init__(self, ndisp=280):
 		# initialize parameters as paper states
 		# optimization parameters
 		self.cellSize = [5, 15, 25] # 3 grid structures: 5x5, 15x15, 25x25
-		self.Kprop = [1, 2, 2] # iteration numbers for propagation for 3 grid structures
-		self.Krand = [7, 0, 0] # for randomization
+		self.Kprop = {5:1, 15:2, 25:2} # iteration numbers for propagation for 3 grid structures
+		self.Krand = {5:7, 15:0, 25:0} # for randomization
 		self.iter = 10 # for main loop
 		self.ndisp = ndisp # dispmax: max number of disparity 
 
@@ -30,7 +30,7 @@ class LocalExpStereo(ndisp=280):
 		self.eps = 0.01
 		self.gamma = 10
 
-	def generateDisparityMap(leftImg, rightImg):
+	def generateDisparityMap(self, leftImg, rightImg):
 		"""
 		Generate disparity maps for both left and right images.
 		It follows the optimization procedure (Algorithm 2 in paper).
@@ -47,7 +47,7 @@ class LocalExpStereo(ndisp=280):
 
 		return leftDis, rightDis
 
-	def optimize(leftImg, rightImg):
+	def optimize(self, leftImg, rightImg):
 		"""
 		Optimization involves iterative alpha-expansion in 16 disjoint groups
 		for each grid structure (3 by default).
@@ -60,28 +60,34 @@ class LocalExpStereo(ndisp=280):
 		- f_right: right disparity plane
 		"""
 		# initialize f randomly
+		print('Initialize f randomly')
 		f_left = np.zeros_like(leftImg) # f: (x, y, fp), fp = (ap, bp, cp)
 		z0 = np.random.uniform(0, self.ndisp, f_left.shape[:2])
 		n_left = self.randomUnitVector(f_left.shape)
-		f_left[...,0] = -n_left[0]/n_left[2] # ap = -nx/nz
-		f_left[...,1] = -n_left[1]/n_left[2] # bp = -ny/nz
-		f_left[...,2] = -(n_left[0]*np.arange(f_left.shape[0])[...,np.newaxis] + \
-					 n_left[1]*np.arange(f_left.shape[1]) + n_left[2]*z0)/n_left[2] # cp = -(nxpu + nypv + nzz0)/nz
+		f_left[...,0] = -n_left[...,0]/n_left[...,2] # ap = -nx/nz
+		f_left[...,1] = -n_left[...,1]/n_left[...,2] # bp = -ny/nz
+		f_left[...,2] = -(n_left[...,0]*np.arange(f_left.shape[0])[...,np.newaxis] + \
+					 n_left[...,1]*np.arange(f_left.shape[1]) + n_left[...,2]*z0)/n_left[...,2] # cp = -(nxpu + nypv + nzz0)/nz
+
 		f_right = np.zeros_like(rightImg) # f: (x, y, fp), fp = (ap, bp, cp)
-		z0 = np.random.uniform(0, self.ndisp, _right.shape[:2])
+		z0 = np.random.uniform(0, self.ndisp, f_right.shape[:2])
 		n_right = self.randomUnitVector(f_right.shape)
-		f_right[...,0] = -n_right[0]/n_right[2] # ap = -nx/nz
-		f_right[...,1] = -n_right[1]/n_right[2] # bp = -ny/nz
-		f_right[...,2] = -(n_right[0]*np.arange(f_right.shape[0])[...,np.newaxis] + \
-					 n_right[1]*np.arange(f_right.shape[1]) + n_right[2]*z0)/n_right[2] # cp = -(nxpu + nypv + nzz0)/nz
+		f_right[...,0] = -n_right[...,0]/n_right[...,2] # ap = -nx/nz
+		f_right[...,1] = -n_right[...,1]/n_right[...,2] # bp = -ny/nz
+		f_right[...,2] = -(n_right[...,0]*np.arange(f_right.shape[0])[...,np.newaxis] + \
+					 n_right[...,1]*np.arange(f_right.shape[1]) + n_right[...,2]*z0)/n_right[...,2] # cp = -(nxpu + nypv + nzz0)/nz
+		print('f shape:', f_left.shape, f_right.shape)
 
 		# initialize perturbation size
+		print('Initialize perturbation size')
 		rd = self.ndisp/2; rn = 1
 
 		# loop for 'iter' times
-		for _ in range(self.iter):
+		for a in range(self.iter):
+			print('Main loop iteration:', a+1, '/', self.iter)
 			## for each grid structure
 			for cellSize in self.cellSize:
+				print('Grid structure:', cellSize)
 				# define cell grid size
 				cellHeight = leftImg.shape[0]/cellSize
 				cellWidth = leftImg.shape[1]/cellSize
@@ -89,36 +95,40 @@ class LocalExpStereo(ndisp=280):
 				## for each disjoint group (0, ..., 15)
 				groupIdx = np.meshgrid(range(4), range(4))
 				for i, j in zip(groupIdx[1].flatten(), groupIdx[0].flatten()):
+					print('Disjoint group:', i, j)
 					# compute center index for each disjoint expansion region
 					y, x = np.meshgrid(np.arange(j, cellWidth, 4), np.arange(i, cellHeight, 4))
+					y = y.flatten(); x = x.flatten()
 
 					## for each cell (in parallel)
-					for center_i, center_j in x, y:
+					for center_i, center_j in zip(x, y):
+						print('For cell:', center_i, center_j)
 						# define expansion region (pixel level)
 						topleftIdx = (max(0, (center_i-1)*cellSize), max(0, (center_j-1)*cellSize)) # inclusive
 						bottomrightIdx = (min(leftImg.shape[0], (center_i+1)*cellSize), 
 										  min(leftImg.shape[1], (center_j+1)*cellSize)) # exclusive
 
 						## propagation
-						for _ in self.Kprop:
+						for b in range(self.Kprop[cellSize]):
+							print('Propagation:', b+1, '/', self.Kprop[cellSize])
 							# randomly choose an f from center region
 							fr = f_left[np.random.randint(center_i*cellSize, (center_i+1)*cellSize), 
 										np.random.randint(center_j*cellSize, (center_j+1)*cellSize)]
 
 							# alpha expansion
-							f_left = self.alphaExp(f, leftImg, rightImg, topleftIdx, bottomrightIdx, fr)
+							f_left = self.alphaExp(f_left, leftImg, rightImg, topleftIdx, bottomrightIdx, fr)
 
 							# repeat for right disparity
 							fr = f_right[np.random.randint(center_i*cellSize, (center_i+1)*cellSize), 
 										np.random.randint(center_j*cellSize, (center_j+1)*cellSize)]
-							f_right = self.alphaExp(f, rightImg, leftImg, topleftIdx, bottomrightIdx, fr)
+							f_right = self.alphaExp(f_right, rightImg, leftImg, topleftIdx, bottomrightIdx, fr)
 
 						## refinement
 						rd_ = rd; rn_ = rn
-						for _ in self.Krand:
+						for c in range(self.Krand[cellSize]):
+							print('Refinement:', c+1, '/', self.Krand[cellSize])
 							# randomly choose an f from center region
-							v, u = np.random.randint(center_i*cellSize, (center_i+1)*cellSize), 
-								   np.random.randint(center_j*cellSize, (center_j+1)*cellSize)
+							v, u = np.random.randint(center_i*cellSize, (center_i+1)*cellSize), np.random.randint(center_j*cellSize, (center_j+1)*cellSize)
 							fr = f_left[v,u]
 
 							# perturb the chosen f
@@ -136,8 +146,7 @@ class LocalExpStereo(ndisp=280):
 							f_left = self.alphaExp(f, leftImg, rightImg, topleftIdx, bottomrightIdx, fr)
 
 							# repeat for right disparity
-							v, u = np.random.randint(center_i*cellSize, (center_i+1)*cellSize), 
-								   np.random.randint(center_j*cellSize, (center_j+1)*cellSize)
+							v, u = np.random.randint(center_i*cellSize, (center_i+1)*cellSize), np.random.randint(center_j*cellSize, (center_j+1)*cellSize)
 							fr = f_right[v,u]
 
 							z0 = self.disparity(fr, u, v) + np.random.uniform(-rd_, rd_)
@@ -157,7 +166,7 @@ class LocalExpStereo(ndisp=280):
 
 		return f_left, f_right
 
-	def postprocessing(f_left, f_right, leftImg, rightImg):
+	def postprocessing(self, f_left, f_right, leftImg, rightImg):
 		"""
 		Left/right consistency check and weighted median filtering.
 		--------------------------------------------------------
@@ -226,12 +235,11 @@ class LocalExpStereo(ndisp=280):
 
 		return leftDis, rightDis		
 
-	def randomUnitVector(dim=3, size):
+	def randomUnitVector(self, size):
 		"""
 		Generate random unit vector for f initialization.
 		--------------------------------------------------------
 		Inputs:
-		- dim: dimension of the vector (3 by default)
 		- size: number of the vector (normally the f shape)
 		Outputs:
 		- vec: random unit vector in the shape of 'size'
@@ -240,7 +248,7 @@ class LocalExpStereo(ndisp=280):
 		mag = np.sum(vec**2, axis=-1, keepdims=True)**0.5
 		return vec/mag
 
-	def disparity(f, u, v):
+	def disparity(self, f, u, v):
 		"""
 		Compute disparity map using disparity planes: d = au + bv + c.
 		--------------------------------------------------------
@@ -254,7 +262,7 @@ class LocalExpStereo(ndisp=280):
 		f[...,1] *= v
 		return np.sum(f, axis=-1)
 
-	def alphaExp(f, refImg, matchImg, topleftIdx, bottomrightIdx, alpha):
+	def alphaExp(self, f, refImg, matchImg, topleftIdx, bottomrightIdx, alpha):
 		"""
 		Alpha expansion.
 		--------------------------------------------------------
@@ -308,7 +316,7 @@ class LocalExpStereo(ndisp=280):
 		return f
 
 
-	def unaryCost(f, refImg, matchImg, topleftIdx, bottomrightIdx):
+	def unaryCost(self, f, refImg, matchImg, topleftIdx, bottomrightIdx):
 		"""
 		Computer the unary cost/data term of MRF energy function.
 		--------------------------------------------------------
@@ -333,7 +341,7 @@ class LocalExpStereo(ndisp=280):
 		E_data = None; GuidedFilter.filter(rou, E_data)
 		return E_data
 
-	def pairwiseCost(f, refImg, topleftIdx, bottomrightIdx):
+	def pairwiseCost(self, f, refImg, topleftIdx, bottomrightIdx):
 		"""
 		Compute the pairwise cost/smoothness term of MRF energy function.
 		--------------------------------------------------------
@@ -350,7 +358,7 @@ class LocalExpStereo(ndisp=280):
 
 		return E_smooth
 
-	def add_edge(f, refImg, topleftIdx, bottomrightIdx, direction):
+	def add_edge(self, f, refImg, topleftIdx, bottomrightIdx, direction):
 		"""
 		Used in pairwiseCost function to add edges.
 		--------------------------------------------------------
