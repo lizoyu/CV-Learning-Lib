@@ -104,9 +104,10 @@ class LocalExpStereo():
 					for center_i, center_j in zip(x, y):
 						print('For cell:', center_i, center_j)
 						# define expansion region (pixel level)
-						topleftIdx = (max(0, (center_i-1)*cellSize), max(0, (center_j-1)*cellSize)) # inclusive
-						bottomrightIdx = (min(leftImg.shape[0], (center_i+1)*cellSize), 
-										  min(leftImg.shape[1], (center_j+1)*cellSize)) # exclusive
+						topleftIdx = (max(0, int((center_i-1)*cellSize)), max(0, int((center_j-1)*cellSize))) # inclusive
+						bottomrightIdx = (int(min(leftImg.shape[0], (center_i+2)*cellSize)), 
+										  int(min(leftImg.shape[1], (center_j+2)*cellSize))) # exclusive
+						print('topleft:', topleftIdx, 'bottomright:', bottomrightIdx)
 
 						## propagation
 						for b in range(self.Kprop[cellSize]):
@@ -280,22 +281,24 @@ class LocalExpStereo():
 			 'bottom-right': np.array([[0,0,0],[0,0,0],[0,0,1]]),
 			 'bottom': np.array([[0,0,0],[0,0,0],[0,1,0]]), 
 			 'bottom-left': np.array([[0,0,0],[0,0,0],[1,0,0]])}
+		s_y, s_x = np.meshgrid(range(topleftIdx[1],bottomrightIdx[1]),
+							   range(topleftIdx[0],bottomrightIdx[0]))
 
 		# loop until convergence
 		energy = 0; prev_energy = np.inf
 		while energy < prev_energy:
 			# create the graph
 			g = maxflow.Graph[float]()
-			nodeids = g.add_grid_nodes(refImg.shape[:2])
+			nodeids = g.add_grid_nodes(s_x.shape)
+			print('graph shape:', nodeids.shape)
 
 			# add unary cost (data term) as terminal edges
 			# new f (f_new) add to source(0), original f add to sink(1)
-			sinkedges = self.unaryCost(f, refImg, matchImg, topleftIdx, bottomrightIdx)
+			sinkedges = self.unaryCost(f, refImg, matchImg, s_x, s_y)
 			# if equal to 'alpha'(f_new), set sink edges to inf
-			comp = np.sum(np.isclose(np.around(f_new, 2), np.around(f, 2)), axis=-1)
+			comp = np.sum(np.isclose(np.around(f_new[s_x,s_y], 2), np.around(f[s_x,s_y], 2)), axis=-1)
 			sinkedges[comp==3] = np.inf
-			g.add_grid_tedges(nodeids, self.unaryCost(f_new, refImg, matchImg, topleftIdx, bottomrightIdx),
-							  sinkedges)
+			g.add_grid_tedges(nodeids, self.unaryCost(f_new, refImg, matchImg, s_x, s_y), sinkedges)
 
 			# add pairwise cost (smoothness term)
 			# smoothness between center and 4 neighbors (another 4 are symmetric)
@@ -316,51 +319,34 @@ class LocalExpStereo():
 		return f
 
 
-	def unaryCost(self, f, refImg, matchImg, topleftIdx, bottomrightIdx):
+	def unaryCost(self, f, refImg, matchImg, s_x, s_y):
 		"""
 		Computer the unary cost/data term of MRF energy function.
 		--------------------------------------------------------
 		Inputs:
 		- f: disparity plane: (H, W, 3)
 		- refImg, matchImg: refImg matches to matchImg (e.g. left disparity: left matches right)
-		- topleftIdx, bottomrightIdx: define the expansion region: (x,y), (x,y)
+		- s_x, s_y: index grid of the expansion region
 		Outputs:
 		- E_data: Energy of data term
 		"""
 		# phi = guidedfilter(expansion region in img, rou)
 		# compute rou
-		s_y, s_x = np.meshgrid(range(topleftIdx[0],bottomrightIdx[0]),
-							   range(topleftIdx[1],bottomrightIdx[1]))
-		s_match_y, s_match_x = np.round(s_y - self.disparity(f[s_x, s_y], s_y, s_x)), s_x # use rounding for convinence
+		s_match_y = np.round(s_y - self.disparity(f[s_x, s_y], s_y, s_x)) # use rounding for convinence
+		s_match_y = np.minimum(refImg.shape[1]-1, np.maximum(0, s_match_y)).astype(np.int)
+		s_match_x = s_x.astype(np.int)
 		rou = (1-self.alpha)*np.minimum(self.taoCol, np.absolute(refImg[s_x,s_y]-matchImg[s_match_x,s_match_y])) + \
 			  self.alpha*np.minimum(self.taoGrad, np.absolute(cv2.Sobel(refImg[s_x,s_y],-1,1,0,ksize=3)-
 			  												  cv2.Sobel(matchImg[s_x,s_y],-1,1,0,ksize=3)))
 
 		# guided filtering
-		GuidedFilter = cv2.createGuidedFilter(refImg[s_x,s_y], self.WkSize, self.e)
-		E_data = None; GuidedFilter.filter(rou, E_data)
-		return E_data
+		E_data = cv2.ximgproc.guidedFilter(refImg[s_x,s_y], rou, self.WkSize, self.e)
+		print('unary cost:', E_data.shape)
+		return np.sum(E_data, axis=-1)
 
-	def pairwiseCost(self, f, refImg, topleftIdx, bottomrightIdx):
+	def pairwiseCost(self, f, refImg, topleftIdx, bottomrightIdx, direction):
 		"""
 		Compute the pairwise cost/smoothness term of MRF energy function.
-		--------------------------------------------------------
-		Inputs:
-		- f: disparity plane: (H, W, 3)
-		- refImg: refImg matches to matchImg (e.g. left disparity: left matches right)
-		- topleftIdx, bottomrightIdx: define the expansion region: (x,y), (x,y)
-		Outputs:
-		- E_smooth: Energy of smoothness term: (H, W, 4) (in 4 neighbors)
-		"""
-		E_smooth = np.zeros((f.shape[0],f,shape[1],4))
-		for i, direction in enumerate(['right', 'bottom-right', 'bottom', 'bottom-left']):
-			E_smooth[...,i] = self.add_edge(f, refImg, topleftIdx, bottomrightIdx, direction)
-
-		return E_smooth
-
-	def add_edge(self, f, refImg, topleftIdx, bottomrightIdx, direction):
-		"""
-		Used in pairwiseCost function to add edges.
 		--------------------------------------------------------
 		Input:
 		- f: disparity plane: (H, W, 3)
