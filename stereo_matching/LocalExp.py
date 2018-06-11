@@ -356,22 +356,24 @@ class LocalExpStereo():
 		Outputs:
 		- edges: smoothness term specific to 'direction'
 		"""
-		d = {'right': (0, f.shape[0], 1, f.shape[1], 0, 1, 0, 0, 0, 1), 
-			 'bottom-right': (1, f.shape[0], 1, f.shape[1], 1, 1, 0, 1, 0, 1),
-			 'bottom': (1, f.shape[0], 0, f.shape[1], 1, 0, 0, 1, 0, 0), 
-			 'bottom-left': (1, f.shape[0], 0, f.shape[1]-1, 1, -1, 0, 1, 1, 0)}
+		d = {'right': (topleftIdx[0], bottomrightIdx[0], topleftIdx[1]+1, bottomrightIdx[1], 0, 1, 0, 0, 0, 1), 
+			 'bottom-right': (topleftIdx[0]+1, bottomrightIdx[0], topleftIdx[1]+1, bottomrightIdx[1], 1, 1, 0, 1, 0, 1),
+			 'bottom': (topleftIdx[0]+1, bottomrightIdx[0], topleftIdx[1], bottomrightIdx[1], 1, 0, 0, 1, 0, 0), 
+			 'bottom-left': (topleftIdx[0]+1, bottomrightIdx[0], topleftIdx[1], bottomrightIdx[1]-1, 1, -1, 0, 1, 1, 0)}
 		i_start, i_end, j_start, j_end, i_offset, j_offset, up, down, left, right = d[direction]
 
-		w = np.exp(-np.absolute(refImg-np.pad(refImg[i_start:i_end,j_start:j_end], ((up,down),(left,right)), 'constant')/self.gamma))
-		fq = np.pad(f[i_start:i_end,j_start:j_end], ((up,down),(left,right)), 'constant')
-		p_u, p_v = np.meshgrid(range(topleftIdx[1],bottomrightIdx[1]),
-							   range(topleftIdx[0],bottomrightIdx[0]))
+		p_u, p_v = np.meshgrid(range(topleftIdx[1], bottomrightIdx[1]),
+							   range(topleftIdx[0], bottomrightIdx[0]))
 		q_u, q_v = np.meshgrid(range(topleftIdx[1]+j_offset,bottomrightIdx[1]+j_offset),
 							   range(topleftIdx[0]+i_offset,bottomrightIdx[0]+i_offset))
+		print(p_u.shape, p_v.shape, q_u.shape, q_v.shape)
+		w = np.exp(-np.absolute(refImg[p_v,p_u]-np.pad(refImg[i_start:i_end,j_start:j_end], ((up,down),(left,right),(0,0)), 'constant'))/self.gamma)
+		fq = np.pad(f[q_v,q_u], ((up,down),(left,right),(0,0)), 'constant')
 		psi = np.absolute(self.disparity(f, p_u, p_v)-self.disparity(fq, p_u, p_v)) + \
 			  np.absolute(self.disparity(fq, q_u, q_v)-self.disparity(f, q_u, q_v))
+		print('pairwise cost:', w.shape, fq.shape, p_u.shape, q_u.shape)
 
-		return np.maximum(self.eps, w)*np.minimum(self.taoDis, psi)
+		return np.maximum(self.eps, np.sum(w, axis=-1))*np.minimum(self.taoDis, psi)
 
 def tester():
 	leftImg = np.float32(cv2.imread('data/left.jpg'))/255
