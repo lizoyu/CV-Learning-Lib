@@ -134,8 +134,8 @@ class LocalExpStereo():
 
 							# perturb the chosen f
 							z0 = self.disparity(fr, u, v) + np.random.uniform(-rd_, rd_)
-							n = np.array([-f[0]/np.sqrt(f[0]**2+f[1]**2+1), -f[1]/np.sqrt(f[0]**2+f[1]**2+1), 
-								 		  1/np.sqrt(f[0]**2+f[1]**2+1)])
+							n = np.array([-fr[0]/np.sqrt(fr[0]**2+fr[1]**2+1), -fr[1]/np.sqrt(fr[0]**2+fr[1]**2+1), 
+								 		  1/np.sqrt(fr[0]**2+fr[1]**2+1)])
 							theta = np.random.uniform(-np.pi/2, np.pi/2); phi = np.random.uniform(0, 2*np.pi)
 							n += np.array([rn_*np.cos(theta)*np.cos(phi), rn_*np.cos(theta)*np.sin(phi), rn_*np.sin(theta)])
 							n = n / np.sum(n**2)**0.5
@@ -144,15 +144,15 @@ class LocalExpStereo():
 							fr[2] = -(n[0]*u + n[1]*v + n[2]*z0)/n[2] # cp = -(nxpu + nypv + nzz0)/nz
 
 							# alpha expansion
-							f_left = self.alphaExp(f, leftImg, rightImg, topleftIdx, bottomrightIdx, fr)
+							f_left = self.alphaExp(f_left, leftImg, rightImg, topleftIdx, bottomrightIdx, fr)
 
 							# repeat for right disparity
 							v, u = np.random.randint(center_i*cellSize, (center_i+1)*cellSize), np.random.randint(center_j*cellSize, (center_j+1)*cellSize)
 							fr = f_right[v,u]
 
 							z0 = self.disparity(fr, u, v) + np.random.uniform(-rd_, rd_)
-							n = np.array([-f[0]/np.sqrt(f[0]**2+f[1]**2+1), -f[1]/np.sqrt(f[0]**2+f[1]**2+1), 
-								 		  1/np.sqrt(f[0]**2+f[1]**2+1)])
+							n = np.array([-fr[0]/np.sqrt(fr[0]**2+fr[1]**2+1), -fr[1]/np.sqrt(fr[0]**2+fr[1]**2+1), 
+								 		  1/np.sqrt(fr[0]**2+fr[1]**2+1)])
 							theta = np.random.uniform(-np.pi/2, np.pi/2); phi = np.random.uniform(0, 2*np.pi)
 							n += np.array([rn_*np.cos(theta)*np.cos(phi), rn_*np.cos(theta)*np.sin(phi), rn_*np.sin(theta)])
 							n = n / np.sum(n**2)**0.5
@@ -160,7 +160,7 @@ class LocalExpStereo():
 							fr[1] = -n[1]/n[2] # bp = -ny/nz
 							fr[2] = -(n[0]*u + n[1]*v + n[2]*z0)/n[2] # cp = -(nxpu + nypv + nzz0)/nz
 
-							f_right = self.alphaExp(f, rightImg, leftImg, topleftIdx, bottomrightIdx, fr)
+							f_right = self.alphaExp(f_right, rightImg, leftImg, topleftIdx, bottomrightIdx, fr)
 
 							rd_ = rd_ / 2; rn_ = rn_ / 2
 			rd = rd / 2; rn = rn / 2
@@ -255,7 +255,7 @@ class LocalExpStereo():
 		--------------------------------------------------------
 		Inputs:
 		- f: disparity plane: (H, W, 3)
-		- u, v: pixel locations: (H, W)(invert order of numpy array)
+		- u, v: pixel locations: (W, H)(invert order of numpy array)
 		Outputs:
 		- d: disparity for a pixel: (H, W)
 		"""
@@ -314,7 +314,9 @@ class LocalExpStereo():
 
 			# update new label
 			seg = g.get_grid_segments(nodeids)
-			f[seg==True] = alpha
+			f_local = f[s_x,s_y]
+			f_local[seg==True] = alpha
+			f[s_x,s_y] = f_local
 
 		return f
 
@@ -366,11 +368,11 @@ class LocalExpStereo():
 							   range(topleftIdx[0], bottomrightIdx[0]))
 		q_u, q_v = np.meshgrid(range(topleftIdx[1]+j_offset,bottomrightIdx[1]+j_offset),
 							   range(topleftIdx[0]+i_offset,bottomrightIdx[0]+i_offset))
-		print(p_u.shape, p_v.shape, q_u.shape, q_v.shape)
 		w = np.exp(-np.absolute(refImg[p_v,p_u]-np.pad(refImg[i_start:i_end,j_start:j_end], ((up,down),(left,right),(0,0)), 'constant'))/self.gamma)
-		fq = np.pad(f[q_v,q_u], ((up,down),(left,right),(0,0)), 'constant')
-		psi = np.absolute(self.disparity(f, p_u, p_v)-self.disparity(fq, p_u, p_v)) + \
-			  np.absolute(self.disparity(fq, q_u, q_v)-self.disparity(f, q_u, q_v))
+		fq = np.pad(f[i_start:i_end,j_start:j_end], ((up,down),(left,right),(0,0)), 'constant')
+		fp = f[p_v,p_u]
+		psi = np.absolute(self.disparity(fp, p_u, p_v)-self.disparity(fq, p_u, p_v)) + \
+			  np.absolute(self.disparity(fq, q_u, q_v)-self.disparity(fp, q_u, q_v))
 		print('pairwise cost:', w.shape, fq.shape, p_u.shape, q_u.shape)
 
 		return np.maximum(self.eps, np.sum(w, axis=-1))*np.minimum(self.taoDis, psi)
