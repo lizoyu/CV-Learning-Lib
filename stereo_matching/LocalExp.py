@@ -76,7 +76,6 @@ class LocalExpStereo():
 		f_right[...,1] = -n_right[...,1]/n_right[...,2] # bp = -ny/nz
 		f_right[...,2] = -(n_right[...,0]*np.arange(f_right.shape[0])[...,np.newaxis] + \
 					 n_right[...,1]*np.arange(f_right.shape[1]) + n_right[...,2]*z0)/n_right[...,2] # cp = -(nxpu + nypv + nzz0)/nz
-		print('f shape:', f_left.shape, f_right.shape)
 
 		# initialize perturbation size
 		print('Initialize perturbation size')
@@ -107,21 +106,20 @@ class LocalExpStereo():
 						topleftIdx = (max(0, int((center_i-1)*cellSize)), max(0, int((center_j-1)*cellSize))) # inclusive
 						bottomrightIdx = (int(min(leftImg.shape[0], (center_i+2)*cellSize)), 
 										  int(min(leftImg.shape[1], (center_j+2)*cellSize))) # exclusive
-						print('topleft:', topleftIdx, 'bottomright:', bottomrightIdx)
 
 						## propagation
 						for b in range(self.Kprop[cellSize]):
 							print('Propagation:', b+1, '/', self.Kprop[cellSize])
 							# randomly choose an f from center region
-							fr = f_left[np.random.randint(center_i*cellSize, (center_i+1)*cellSize), 
-										np.random.randint(center_j*cellSize, (center_j+1)*cellSize)]
+							fr = f_left[np.random.randint(center_i*cellSize, min(leftImg.shape[0]-1, (center_i+1)*cellSize)), 
+										np.random.randint(center_j*cellSize, min(leftImg.shape[1]-1, (center_j+1)*cellSize))]
 
 							# alpha expansion
 							f_left = self.alphaExp(f_left, leftImg, rightImg, topleftIdx, bottomrightIdx, fr)
 
 							# repeat for right disparity
-							fr = f_right[np.random.randint(center_i*cellSize, (center_i+1)*cellSize), 
-										np.random.randint(center_j*cellSize, (center_j+1)*cellSize)]
+							fr = f_right[np.random.randint(center_i*cellSize, min(leftImg.shape[0]-1, (center_i+1)*cellSize)), 
+										np.random.randint(center_j*cellSize, min(leftImg.shape[1]-1, (center_j+1)*cellSize))]
 							f_right = self.alphaExp(f_right, rightImg, leftImg, topleftIdx, bottomrightIdx, fr)
 
 						## refinement
@@ -129,7 +127,8 @@ class LocalExpStereo():
 						for c in range(self.Krand[cellSize]):
 							print('Refinement:', c+1, '/', self.Krand[cellSize])
 							# randomly choose an f from center region
-							v, u = np.random.randint(center_i*cellSize, (center_i+1)*cellSize), np.random.randint(center_j*cellSize, (center_j+1)*cellSize)
+							v = np.random.randint(center_i*cellSize, min(leftImg.shape[0], (center_i+1)*cellSize))
+							u = np.random.randint(center_j*cellSize, min(leftImg.shape[1], (center_j+1)*cellSize))
 							fr = f_left[v,u]
 
 							# perturb the chosen f
@@ -147,7 +146,8 @@ class LocalExpStereo():
 							f_left = self.alphaExp(f_left, leftImg, rightImg, topleftIdx, bottomrightIdx, fr)
 
 							# repeat for right disparity
-							v, u = np.random.randint(center_i*cellSize, (center_i+1)*cellSize), np.random.randint(center_j*cellSize, (center_j+1)*cellSize)
+							v = np.random.randint(center_i*cellSize, min(leftImg.shape[0], (center_i+1)*cellSize))
+							u = np.random.randint(center_j*cellSize, min(leftImg.shape[1], (center_j+1)*cellSize))
 							fr = f_right[v,u]
 
 							z0 = self.disparity(fr, u, v) + np.random.uniform(-rd_, rd_)
@@ -290,7 +290,6 @@ class LocalExpStereo():
 			# create the graph
 			g = maxflow.Graph[float]()
 			nodeids = g.add_grid_nodes(s_x.shape)
-			print('graph shape:', nodeids.shape)
 
 			# add unary cost (data term) as terminal edges
 			# new f (f_new) add to source(0), original f add to sink(1)
@@ -343,7 +342,6 @@ class LocalExpStereo():
 
 		# guided filtering
 		E_data = cv2.ximgproc.guidedFilter(refImg[s_x,s_y], rou, self.WkSize, self.e)
-		print('unary cost:', E_data.shape)
 		return np.sum(E_data, axis=-1)
 
 	def pairwiseCost(self, f, refImg, topleftIdx, bottomrightIdx, direction):
@@ -373,7 +371,6 @@ class LocalExpStereo():
 		fp = f[p_v,p_u]
 		psi = np.absolute(self.disparity(fp, p_u, p_v)-self.disparity(fq, p_u, p_v)) + \
 			  np.absolute(self.disparity(fq, q_u, q_v)-self.disparity(fp, q_u, q_v))
-		print('pairwise cost:', w.shape, fq.shape, p_u.shape, q_u.shape)
 
 		return np.maximum(self.eps, np.sum(w, axis=-1))*np.minimum(self.taoDis, psi)
 
@@ -382,5 +379,7 @@ def tester():
 	rightImg = np.float32(cv2.imread('data/right.jpg'))/255
 	stereo = LocalExpStereo()
 	leftDis, rightDis = stereo.generateDisparityMap(leftImg, rightImg)
+	cv2.imwrite('leftDis.jpg', leftDis)
+	cv2.imwrite('rightDis.jpg', rightDis)
 
 tester()
