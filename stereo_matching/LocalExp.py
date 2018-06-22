@@ -10,12 +10,19 @@ class LocalExpStereo():
 	def __init__(self, ndisp=280):
 		# initialize parameters as paper states
 		# optimization parameters
+		
 		self.cellSize = [5, 15, 25] # 3 grid structures: 5x5, 15x15, 25x25
 		self.Kprop = {5:1, 15:2, 25:2} # iteration numbers for propagation for 3 grid structures
 		self.Krand = {5:7, 15:0, 25:0} # for randomization
 		self.iter = 10 # for main loop
+		'''
+		# test parameters
+		self.cellSize = [25] # 3 grid structures: 5x5, 15x15, 25x25
+		self.Kprop = {25:0} # iteration numbers for propagation for 3 grid structures
+		self.Krand = {25:0} # for randomization
+		self.iter = 1 # for main loop
 		self.ndisp = ndisp # dispmax: max number of disparity 
-
+		'''
 		# MRF data term parameters
 		self.e = 1e-4
 		self.taoCol = 10
@@ -43,7 +50,7 @@ class LocalExpStereo():
 		- rightDis: right disparity
 		"""
 		f_left, f_right = self.optimize(leftImg, rightImg)
-		leftDis, rightDis = self.postprocessing(f_left, f_right)
+		leftDis, rightDis = self.postprocessing(f_left, f_right, leftImg, rightImg)
 
 		return leftDis, rightDis
 
@@ -100,6 +107,8 @@ class LocalExpStereo():
 					y = y.flatten(); x = x.flatten()
 
 					## for each cell (in parallel)
+					mp = Pool(processes=14)
+					'''
 					for center_i, center_j in zip(x, y):
 						print('For cell:', center_i, center_j)
 						# define expansion region (pixel level)
@@ -163,6 +172,7 @@ class LocalExpStereo():
 							f_right = self.alphaExp(f_right, rightImg, leftImg, topleftIdx, bottomrightIdx, fr)
 
 							rd_ = rd_ / 2; rn_ = rn_ / 2
+					'''
 			rd = rd / 2; rn = rn / 2
 
 		return f_left, f_right
@@ -180,55 +190,59 @@ class LocalExpStereo():
 		"""
 		# find invalidated pixels
 		s_y, s_x = np.meshgrid(range(f_left.shape[1]), range(f_left.shape[0]))
-		match_y, match_x = s_y - np.ceil(f_left), s_x
-		checkLeft = np.absolute(f[s_x, s_y] - f[match_x, match_y]) > 1
-		match_y, match_x = s_y - np.ceil(f_right), s_x
-		checkright = np.absolute(f[s_x, s_y] - f[match_x, match_y]) > 1
-
+		match_y = np.round(s_y - self.disparity(f_left, s_y, s_x))
+		match_y = np.minimum(f_left.shape[1]-1, np.maximum(0, match_y)).astype(np.int)
+		match_x = s_x.astype(np.int)
+		checkLeft = np.absolute(self.disparity(f_left[s_x, s_y], s_y, s_x) - self.disparity(f_left[match_x, match_y], s_y, s_x)) > 1
+		match_y = np.round(s_y - self.disparity(f_right, s_y, s_x))
+		match_y = np.minimum(f_right.shape[1]-1, np.maximum(0, match_y)).astype(np.int)
+		checkRight = np.absolute(self.disparity(f_right[s_x, s_y], s_y, s_x) - self.disparity(f_right[match_x, match_y], s_y, s_x)) > 1
+		
 		# fill in the invalidated pixels
-		for i, j in np.where(checkLeft):
+		for i, j in zip(*np.where(checkLeft)):
 			leftValid = [i, j-1]
-			while leftValid[1] > 0 and not check[leftValid]:
+			while leftValid[1] > 0 and not checkLeft[tuple(leftValid)]:
 				leftValid[1] -= 1
 			rightValid = [i, j+1]
-			while rightValid[1] < leftImg.shape[1] and not check[rightValid]:
+			while rightValid[1] < leftImg.shape[1] and not checkLeft[tuple(rightValid)]:
 				rightValid[1] += 1
 
 			leftValid[1] = max(0, leftValid[1]); rightValid[1] = min(rightValid[1], leftImg.shape[1]-1)
-			d = {tuple(f_left[leftValid]): self.disparity(f_left, leftValid[1], leftValid[0]), 
-				 tuple(f_left[rightValid]): self.disparity(f_left, rightValid[1], rightValid[0])}
+
+			d = {tuple(f_left[tuple(leftValid)]): self.disparity(f_left[tuple(leftValid)], leftValid[1], leftValid[0]), 
+				 tuple(f_left[tuple(rightValid)]): self.disparity(f_left[tuple(rightValid)], rightValid[1], rightValid[0])}
 			f_left[i,j] = min(d, key=lambda x: d[x])
 
-		for i, j in np.where(checkright):
+		for i, j in zip(*np.where(checkRight)):
 			leftValid = [i, j-1]
-			while leftValid[1] > 0 and not check[leftValid]:
+			while leftValid[1] > 0 and not checkRight[tuple(leftValid)]:
 				leftValid[1] -= 1
 			rightValid = [i, j+1]
-			while rightValid[1] < leftImg.shape[1] and not check[rightValid]:
+			while rightValid[1] < leftImg.shape[1] and not checkRight[tuple(rightValid)]:
 				rightValid[1] += 1
 
 			leftValid[1] = max(0, leftValid[1]); rightValid[1] = min(rightValid[1], rightImg.shape[1]-1) 
-			d = {tuple(f_right[leftValid]): self.disparity(f_right, leftValid[1], leftValid[0]), 
-				 tuple(f_right[rightValid]): self.disparity(f_right, rightValid[1], rightValid[0])}
+			d = {tuple(f_right[tuple(leftValid)]): self.disparity(f_right[tuple(leftValid)], leftValid[1], leftValid[0]), 
+				 tuple(f_right[tuple(rightValid)]): self.disparity(f_right[tuple(rightValid)], rightValid[1], rightValid[0])}
 			f_right[i,j] = min(d, key=lambda x: d[x])
-
+		
 		# disparity plane f -> disparity d
 		leftDis = self.disparity(f_left, s_y, s_x)
 		rightDis = self.disparity(f_right, s_y, s_x)
 
 		# apply weighted median filtering
 		r = int(self.WpSize / 2)
-		for i, j in np.where(checkLeft):
-			beta = leftImg[max(0,i-r):min(i+r+1,leftImg.shape[0]),max(0,j-r):min(j+r+1,leftImg.shape[1])]
-			w = np.tile(np.exp(-np.absolute(leftImg[i,j]-beta)/self.gamma)[np.newaxis,...], (beta.size,1,1))
+		for i, j in zip(*np.where(checkLeft)):
+			beta = leftDis[max(0,i-r):min(i+r+1,leftDis.shape[0]),max(0,j-r):min(j+r+1,leftDis.shape[1])]
+			w = np.tile(np.exp(-np.absolute(leftDis[i,j]-beta)/self.gamma)[np.newaxis,...], (beta.size,1,1))
 			X = np.tile(beta[np.newaxis,...], (beta.size,1,1))
 			beta = beta.flatten().reshape(-1,1,1)
 			idx = np.argmin(np.sum(w*np.absolute(X-beta), axis=(1,2)))
 			leftDis[i,j] = beta[idx,0,0]
 
-		for i, j in np.where(checkright):
-			beta = rightImg[max(0,i-r):min(i+r+1,rightImg.shape[0]),max(0,j-r):min(j+r+1,rightImg.shape[1])]
-			w = np.tile(np.exp(-np.absolute(rightImg[i,j]-beta)/self.gamma)[np.newaxis,...], (beta.size,1,1))
+		for i, j in zip(*np.where(checkRight)):
+			beta = rightDis[max(0,i-r):min(i+r+1,rightDis.shape[0]),max(0,j-r):min(j+r+1,rightDis.shape[1])]
+			w = np.tile(np.exp(-np.absolute(rightDis[i,j]-beta)/self.gamma)[np.newaxis,...], (beta.size,1,1))
 			X = np.tile(beta[np.newaxis,...], (beta.size,1,1))
 			beta = beta.flatten().reshape(-1,1,1)
 			idx = np.argmin(np.sum(w*np.absolute(X-beta), axis=(1,2)))
@@ -263,6 +277,84 @@ class LocalExpStereo():
 		f[...,1] *= v
 		return np.sum(f, axis=-1)
 
+	def paraAlphaExp(center_idx, cellSize, leftImg, rightImg, f_left, f_right, rd, rn):
+		"""
+		Iterative alpha expansion (for parallel purpose).
+		--------------------------------------------------------
+		Inputs:
+		- center_idx: center region's topleft index
+		- cellSize: size (length) of a cell
+		- leftImg, rightImg: left and right images
+		- f_left, f_right: left and right disparity planes
+		- rd, rn: allowed changes of disparity planes
+		Outputs:
+		- None, modify f_left, f_right in-place
+		"""
+		center_i, center_j = center_idx
+		print('For cell:', center_i, center_j)
+		# define expansion region (pixel level)
+		topleftIdx = (max(0, int((center_i-1)*cellSize)), max(0, int((center_j-1)*cellSize))) # inclusive
+		bottomrightIdx = (int(min(leftImg.shape[0], (center_i+2)*cellSize)), 
+						  int(min(leftImg.shape[1], (center_j+2)*cellSize))) # exclusive
+
+		## propagation
+		for b in range(self.Kprop[cellSize]):
+			print('Propagation:', b+1, '/', self.Kprop[cellSize])
+			# randomly choose an f from center region
+			fr = f_left[np.random.randint(center_i*cellSize, min(leftImg.shape[0]-1, (center_i+1)*cellSize)), 
+						np.random.randint(center_j*cellSize, min(leftImg.shape[1]-1, (center_j+1)*cellSize))]
+
+			# alpha expansion
+			self.alphaExp(f_left, leftImg, rightImg, topleftIdx, bottomrightIdx, fr)
+
+			# repeat for right disparity
+			fr = f_right[np.random.randint(center_i*cellSize, min(leftImg.shape[0]-1, (center_i+1)*cellSize)), 
+						np.random.randint(center_j*cellSize, min(leftImg.shape[1]-1, (center_j+1)*cellSize))]
+			self.alphaExp(f_right, rightImg, leftImg, topleftIdx, bottomrightIdx, fr)
+
+		## refinement
+		rd_ = rd; rn_ = rn
+		for c in range(self.Krand[cellSize]):
+			print('Refinement:', c+1, '/', self.Krand[cellSize])
+			# randomly choose an f from center region
+			v = np.random.randint(center_i*cellSize, min(leftImg.shape[0], (center_i+1)*cellSize))
+			u = np.random.randint(center_j*cellSize, min(leftImg.shape[1], (center_j+1)*cellSize))
+			fr = f_left[v,u]
+
+			# perturb the chosen f
+			z0 = self.disparity(fr, u, v) + np.random.uniform(-rd_, rd_)
+			n = np.array([-fr[0]/np.sqrt(fr[0]**2+fr[1]**2+1), -fr[1]/np.sqrt(fr[0]**2+fr[1]**2+1), 
+				 		  1/np.sqrt(fr[0]**2+fr[1]**2+1)])
+			theta = np.random.uniform(-np.pi/2, np.pi/2); phi = np.random.uniform(0, 2*np.pi)
+			n += np.array([rn_*np.cos(theta)*np.cos(phi), rn_*np.cos(theta)*np.sin(phi), rn_*np.sin(theta)])
+			n = n / np.sum(n**2)**0.5
+			fr[0] = -n[0]/n[2] # ap = -nx/nz
+			fr[1] = -n[1]/n[2] # bp = -ny/nz
+			fr[2] = -(n[0]*u + n[1]*v + n[2]*z0)/n[2] # cp = -(nxpu + nypv + nzz0)/nz
+
+			# alpha expansion
+			self.alphaExp(f_left, leftImg, rightImg, topleftIdx, bottomrightIdx, fr)
+
+			# repeat for right disparity
+			v = np.random.randint(center_i*cellSize, min(leftImg.shape[0], (center_i+1)*cellSize))
+			u = np.random.randint(center_j*cellSize, min(leftImg.shape[1], (center_j+1)*cellSize))
+			fr = f_right[v,u]
+
+			z0 = self.disparity(fr, u, v) + np.random.uniform(-rd_, rd_)
+			n = np.array([-fr[0]/np.sqrt(fr[0]**2+fr[1]**2+1), -fr[1]/np.sqrt(fr[0]**2+fr[1]**2+1), 
+				 		  1/np.sqrt(fr[0]**2+fr[1]**2+1)])
+			theta = np.random.uniform(-np.pi/2, np.pi/2); phi = np.random.uniform(0, 2*np.pi)
+			n += np.array([rn_*np.cos(theta)*np.cos(phi), rn_*np.cos(theta)*np.sin(phi), rn_*np.sin(theta)])
+			n = n / np.sum(n**2)**0.5
+			fr[0] = -n[0]/n[2] # ap = -nx/nz
+			fr[1] = -n[1]/n[2] # bp = -ny/nz
+			fr[2] = -(n[0]*u + n[1]*v + n[2]*z0)/n[2] # cp = -(nxpu + nypv + nzz0)/nz
+
+			self.alphaExp(f_right, rightImg, leftImg, topleftIdx, bottomrightIdx, fr)
+
+			rd_ = rd_ / 2; rn_ = rn_ / 2
+		return
+
 	def alphaExp(self, f, refImg, matchImg, topleftIdx, bottomrightIdx, alpha):
 		"""
 		Alpha expansion.
@@ -273,7 +365,7 @@ class LocalExpStereo():
 		- topleftIdx, bottomrightIdx: define the expansion region: (x,y), (x,y)
 		- alpha: alternative label
 		Outputs:
-		- f: alpha-expanded disparity plane
+		- None, modify f in-place
 		"""
 		# reduce re-computation efforts
 		f_new = np.tile(alpha.reshape(1,1,-1), (f.shape[0], f.shape[1],1))
@@ -317,7 +409,7 @@ class LocalExpStereo():
 			f_local[seg==True] = alpha
 			f[s_x,s_y] = f_local
 
-		return f
+		return
 
 
 	def unaryCost(self, f, refImg, matchImg, s_x, s_y):
