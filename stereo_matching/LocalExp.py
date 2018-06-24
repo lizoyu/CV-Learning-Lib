@@ -107,7 +107,10 @@ class LocalExpStereo():
 					y = y.flatten(); x = x.flatten()
 
 					## for each cell (in parallel)
+					n = y.size
 					mp = Pool(processes=14)
+					mp.starmap(paraAlphaExp, zip(x, y, [cellSize]*n, [leftImg]*n, [rightImg]*n, 
+							   [f_left]*n, [f_right]*n, [rd]*n, [rn]*n))
 					'''
 					for center_i, center_j in zip(x, y):
 						print('For cell:', center_i, center_j)
@@ -277,12 +280,12 @@ class LocalExpStereo():
 		f[...,1] *= v
 		return np.sum(f, axis=-1)
 
-	def paraAlphaExp(center_idx, cellSize, leftImg, rightImg, f_left, f_right, rd, rn):
+	def paraAlphaExp(center_i, center_j, cellSize, leftImg, rightImg, f_left, f_right, rd, rn):
 		"""
 		Iterative alpha expansion (for parallel purpose).
 		--------------------------------------------------------
 		Inputs:
-		- center_idx: center region's topleft index
+		- center_i, center_j: center region's topleft index
 		- cellSize: size (length) of a cell
 		- leftImg, rightImg: left and right images
 		- f_left, f_right: left and right disparity planes
@@ -290,7 +293,6 @@ class LocalExpStereo():
 		Outputs:
 		- None, modify f_left, f_right in-place
 		"""
-		center_i, center_j = center_idx
 		print('For cell:', center_i, center_j)
 		# define expansion region (pixel level)
 		topleftIdx = (max(0, int((center_i-1)*cellSize)), max(0, int((center_j-1)*cellSize))) # inclusive
