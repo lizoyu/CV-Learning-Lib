@@ -15,6 +15,7 @@ class LocalExpStereo():
 		self.Kprop = {5:1, 15:2, 25:2} # iteration numbers for propagation for 3 grid structures
 		self.Krand = {5:7, 15:0, 25:0} # for randomization
 		self.iter = 10 # for main loop
+		self.ndisp = ndisp
 		'''
 		# test parameters
 		self.cellSize = [25] # 3 grid structures: 5x5, 15x15, 25x25
@@ -50,7 +51,9 @@ class LocalExpStereo():
 		- rightDis: right disparity
 		"""
 		f_left, f_right = self.optimize(leftImg, rightImg)
-		leftDis, rightDis = self.postprocessing(f_left, f_right, leftImg, rightImg)
+		s_y, s_x = np.meshgrid(range(f_left.shape[1]), range(f_left.shape[0]))
+		return self.disparity(f_left, s_y, s_x), self.disparity(f_right, s_y, s_x)
+		#leftDis, rightDis = self.postprocessing(f_left, f_right, leftImg, rightImg)
 
 		return leftDis, rightDis
 
@@ -108,9 +111,10 @@ class LocalExpStereo():
 
 					## for each cell (in parallel)
 					n = y.size
-					mp = Pool(processes=14)
-					mp.starmap(paraAlphaExp, zip(x, y, [cellSize]*n, [leftImg]*n, [rightImg]*n, 
-							   [f_left]*n, [f_right]*n, [rd]*n, [rn]*n))
+					mp = Pool(processes=13)
+					mp.starmap(self.paraAlphaExp, zip(x, y, [cellSize]*n, [leftImg for _ in range(n)], 
+							   [rightImg for _ in range(n)], [f_left for _ in range(n)], [f_right for _ in range(n)],
+							   [rd]*n, [rn]*n))
 					'''
 					for center_i, center_j in zip(x, y):
 						print('For cell:', center_i, center_j)
@@ -280,7 +284,7 @@ class LocalExpStereo():
 		f[...,1] *= v
 		return np.sum(f, axis=-1)
 
-	def paraAlphaExp(center_i, center_j, cellSize, leftImg, rightImg, f_left, f_right, rd, rn):
+	def paraAlphaExp(self, center_i, center_j, cellSize, leftImg, rightImg, f_left, f_right, rd, rn):
 		"""
 		Iterative alpha expansion (for parallel purpose).
 		--------------------------------------------------------
@@ -293,7 +297,7 @@ class LocalExpStereo():
 		Outputs:
 		- None, modify f_left, f_right in-place
 		"""
-		print('For cell:', center_i, center_j)
+		#print('For cell:', center_i, center_j)
 		# define expansion region (pixel level)
 		topleftIdx = (max(0, int((center_i-1)*cellSize)), max(0, int((center_j-1)*cellSize))) # inclusive
 		bottomrightIdx = (int(min(leftImg.shape[0], (center_i+2)*cellSize)), 
@@ -301,7 +305,7 @@ class LocalExpStereo():
 
 		## propagation
 		for b in range(self.Kprop[cellSize]):
-			print('Propagation:', b+1, '/', self.Kprop[cellSize])
+			#print('Propagation:', b+1, '/', self.Kprop[cellSize])
 			# randomly choose an f from center region
 			fr = f_left[np.random.randint(center_i*cellSize, min(leftImg.shape[0]-1, (center_i+1)*cellSize)), 
 						np.random.randint(center_j*cellSize, min(leftImg.shape[1]-1, (center_j+1)*cellSize))]
@@ -317,7 +321,7 @@ class LocalExpStereo():
 		## refinement
 		rd_ = rd; rn_ = rn
 		for c in range(self.Krand[cellSize]):
-			print('Refinement:', c+1, '/', self.Krand[cellSize])
+			#print('Refinement:', c+1, '/', self.Krand[cellSize])
 			# randomly choose an f from center region
 			v = np.random.randint(center_i*cellSize, min(leftImg.shape[0], (center_i+1)*cellSize))
 			u = np.random.randint(center_j*cellSize, min(leftImg.shape[1], (center_j+1)*cellSize))
