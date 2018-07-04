@@ -1,7 +1,6 @@
 import numpy as np
-import cv2
+import cv2, maxflow, psutil
 from multiprocessing import Pool
-import maxflow 
 
 class LocalExpStereo():
 	"""
@@ -90,6 +89,7 @@ class LocalExpStereo():
 		# initialize perturbation size
 		print('Initialize perturbation size')
 		rd = self.ndisp/2; rn = 1
+		print('mem %:', psutil.virtual_memory()[2])
 
 		# loop for 'iter' times
 		for a in range(self.iter):
@@ -115,6 +115,7 @@ class LocalExpStereo():
 					mp.starmap(self.paraAlphaExp, zip(x, y, [cellSize]*n, [leftImg for _ in range(n)], 
 							   [rightImg for _ in range(n)], [f_left for _ in range(n)], [f_right for _ in range(n)],
 							   [rd]*n, [rn]*n))
+					print('mem %:', psutil.virtual_memory()[2])
 					'''
 					for center_i, center_j in zip(x, y):
 						print('For cell:', center_i, center_j)
@@ -337,6 +338,7 @@ class LocalExpStereo():
 			fr[0] = -n[0]/n[2] # ap = -nx/nz
 			fr[1] = -n[1]/n[2] # bp = -ny/nz
 			fr[2] = -(n[0]*u + n[1]*v + n[2]*z0)/n[2] # cp = -(nxpu + nypv + nzz0)/nz
+			del z0, n, theta, phi
 
 			# alpha expansion
 			self.alphaExp(f_left, leftImg, rightImg, topleftIdx, bottomrightIdx, fr)
@@ -355,10 +357,13 @@ class LocalExpStereo():
 			fr[0] = -n[0]/n[2] # ap = -nx/nz
 			fr[1] = -n[1]/n[2] # bp = -ny/nz
 			fr[2] = -(n[0]*u + n[1]*v + n[2]*z0)/n[2] # cp = -(nxpu + nypv + nzz0)/nz
+			del z0, n, theta, phi
 
 			self.alphaExp(f_right, rightImg, leftImg, topleftIdx, bottomrightIdx, fr)
 
 			rd_ = rd_ / 2; rn_ = rn_ / 2
+
+		del topleftIdx, bottomrightIdx
 		return
 
 	def alphaExp(self, f, refImg, matchImg, topleftIdx, bottomrightIdx, alpha):
@@ -415,6 +420,9 @@ class LocalExpStereo():
 			f_local[seg==True] = alpha
 			f[s_x,s_y] = f_local
 
+			del g, nodeids, sinkedges, comp
+
+		del f_new, s_y, s_x
 		return
 
 
@@ -437,9 +445,12 @@ class LocalExpStereo():
 		rou = (1-self.alpha)*np.minimum(self.taoCol, np.absolute(refImg[s_x,s_y]-matchImg[s_match_x,s_match_y])) + \
 			  self.alpha*np.minimum(self.taoGrad, np.absolute(cv2.Sobel(refImg[s_x,s_y],-1,1,0,ksize=3)-
 			  												  cv2.Sobel(matchImg[s_x,s_y],-1,1,0,ksize=3)))
+		del s_match_y, s_match_x
 
 		# guided filtering
 		E_data = cv2.ximgproc.guidedFilter(refImg[s_x,s_y], rou, self.WkSize, self.e)
+		del rou
+
 		return np.sum(E_data, axis=-1)
 
 	def pairwiseCost(self, f, refImg, topleftIdx, bottomrightIdx, direction):
@@ -469,7 +480,7 @@ class LocalExpStereo():
 		fp = f[p_v,p_u]
 		psi = np.absolute(self.disparity(fp, p_u, p_v)-self.disparity(fq, p_u, p_v)) + \
 			  np.absolute(self.disparity(fq, q_u, q_v)-self.disparity(fp, q_u, q_v))
-
+		del p_u, p_v, q_u, q_v, fq, fp
 		return np.maximum(self.eps, np.sum(w, axis=-1))*np.minimum(self.taoDis, psi)
 
 def tester():
