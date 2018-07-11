@@ -1,5 +1,5 @@
 import numpy as np
-import cv2, maxflow, psutil
+import cv2, maxflow, psutil, gc
 from multiprocessing import Pool
 
 class LocalExpStereo():
@@ -85,6 +85,7 @@ class LocalExpStereo():
 		f_right[...,1] = -n_right[...,1]/n_right[...,2] # bp = -ny/nz
 		f_right[...,2] = -(n_right[...,0]*np.arange(f_right.shape[0])[...,np.newaxis] + \
 					 n_right[...,1]*np.arange(f_right.shape[1]) + n_right[...,2]*z0)/n_right[...,2] # cp = -(nxpu + nypv + nzz0)/nz
+		del z0, n_left, n_right
 
 		# initialize perturbation size
 		print('Initialize perturbation size')
@@ -112,10 +113,16 @@ class LocalExpStereo():
 					## for each cell (in parallel)
 					n = y.size
 					mp = Pool(processes=13)
-					mp.starmap(self.paraAlphaExp, zip(x, y, [cellSize]*n, [leftImg for _ in range(n)], 
-							   [rightImg for _ in range(n)], [f_left for _ in range(n)], [f_right for _ in range(n)],
-							   [rd]*n, [rn]*n))
+					params = zip(x, y, [cellSize]*n, [leftImg for _ in range(n)], [rightImg for _ in range(n)], 
+								 [f_left for _ in range(n)], [f_right for _ in range(n)], [rd]*n, [rn]*n)
+					mp.starmap(self.paraAlphaExp, params)
+					x = None; y = None, params = None
+					gc.collect()
+
 					print('mem %:', psutil.virtual_memory()[2])
+					if psutil.virtual_memory()[2] >= 50:
+						print('Memory usage over half, aborted.')
+						return
 					'''
 					for center_i, center_j in zip(x, y):
 						print('For cell:', center_i, center_j)
